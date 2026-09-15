@@ -3,6 +3,8 @@
 import { useState, type RefObject } from 'react';
 import { toPng } from 'html-to-image';
 import { toCsv } from '@/lib/format';
+import type { CsvPayload } from '@/lib/exports';
+import { useDashboard } from '@/store/useDashboard';
 
 interface Props {
   /** The panel captured when exporting a PNG. */
@@ -10,8 +12,14 @@ interface Props {
   /** Filename stem, e.g. "levsn-by-basin-2025". */
   filename: string;
   /** Supplies the current view's tabular data at click time. */
-  getCsv: () => { headers: string[]; rows: unknown[][] } | null;
+  getCsv: () => CsvPayload | null;
 }
+
+/**
+ * Browsers refuse to rasterise beyond roughly this height, and a PNG that tall
+ * is unreadable anyway. Past it, PDF is offered instead.
+ */
+const PNG_MAX_HEIGHT = 12000;
 
 function download(href: string, name: string) {
   const a = document.createElement('a');
@@ -25,26 +33,76 @@ function download(href: string, name: string) {
 export function ExportMenu({ targetRef, filename, getCsv }: Props) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const setExportMode = useDashboard((s) => s.setExportMode);
+
+  /** Renders every row, runs `fn`, then restores the paged view. */
+  async function withFullTable<T>(fn: () => Promise<T>): Promise<T> {
+    setExportMode(true);
+    // Two frames so React commits the expanded table before it is captured.
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    await new Promise((r) => setTimeout(r, 120));
+    try {
+      return await fn();
+    } finally {
+      setExportMode(false);
+    }
+  }
 
   async function exportPng() {
     if (!targetRef.current) return;
     setBusy('png');
+    setNote(null);
+
     try {
-      const dataUrl = await toPng(targetRef.current, {
-        backgroundColor: '#ffffff',
-        pixelRatio: 2,
-        cacheBust: true,
-        // Leaflet tiles are cross-origin; skipping them avoids a tainted canvas.
-        filter: (node) =>
-          !(node instanceof HTMLElement && node.dataset.exportIgnore === 'true'),
+      await withFullTable(async () => {
+        const node = targetRef.current;
+        if (!node) return;
+
+        const height = node.scrollHeight;
+        if (height > PNG_MAX_HEIGHT) {
+          setNote(
+            `This table is ${height.toLocaleString()}px tall — too long for a usable image. Use PDF, or narrow the filters.`
+          );
+          return;
+        }
+
+        const dataUrl = await toPng(node, {
+          backgroundColor: '#ffffff',
+          pixelRatio: 2,
+          cacheBust: true,
+          width: node.scrollWidth,
+          height,
+          filter: (n) => !(n instanceof HTMLElement && n.dataset.exportIgnore === 'true'),
+        });
+        download(dataUrl, `${filename}.png`);
+        setOpen(false);
       });
-      download(dataUrl, `${filename}.png`);
     } catch (e) {
       console.error('PNG export failed', e);
+      setNote('Could not render the image. Try PDF instead.');
     } finally {
       setBusy(null);
-      setOpen(false);
+    }
+  }
+
+  /**
+   * Print to PDF. The right tool for long tables: the browser paginates,
+   * repeats table headers on every page, and has no canvas size limit.
+   */
+  async function exportPdf() {
+    setBusy('pdf');
+    setNote(null);
+    try {
+      await withFullTable(async () => {
+        setOpen(false);
+        await new Promise((r) => setTimeout(r, 60));
+        window.print();
+        // Give the print dialog a moment before the table collapses again.
+        await new Promise((r) => setTimeout(r, 600));
+      });
+    } finally {
+      setBusy(null);
     }
   }
 
@@ -57,7 +115,7 @@ export function ExportMenu({ targetRef, filename, getCsv }: Props) {
     });
     const url = URL.createObjectURL(blob);
     download(url, `${filename}.csv`);
-    URL.revokeObjectURL(url);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
     setBusy(null);
     setOpen(false);
   }
@@ -65,8 +123,8 @@ export function ExportMenu({ targetRef, filename, getCsv }: Props) {
   async function copyLink() {
     try {
       await navigator.clipboard.writeText(window.location.href);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1800);
+      setNote('Link copied.');
+      setTimeout(() => setNote(null), 1800);
     } catch {
       /* clipboard unavailable - the URL bar already holds the state */
     }
@@ -89,36 +147,59 @@ export function ExportMenu({ targetRef, filename, getCsv }: Props) {
       {open && (
         <>
           <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 z-30 mt-1 w-56 overflow-hidden rounded-panel border border-cwa-silver bg-white shadow-panel">
+          <div className="absolute right-0 z-30 mt-1 w-64 overflow-hidden rounded-panel border border-cwa-silver bg-white shadow-panel">
             <button
-              onClick={exportPng}
+              onClick={() => void exportCsv()}
               disabled={busy !== null}
               className="block w-full px-3 py-2.5 text-left text-[12px] hover:bg-cwa-mist disabled:opacity-50"
+            >
+              <span className="font-medium text-cwa-ink">Download CSV</span>
+              <span className="block text-[11px] text-cwa-slate">
+                This tab&rsquo;s table, filtered, all rows
+              </span>
+            </button>
+
+            <button
+              onClick={() => void exportPdf()}
+              disabled={busy !== null}
+              className="block w-full border-t border-cwa-mist px-3 py-2.5 text-left text-[12px] hover:bg-cwa-mist disabled:opacity-50"
+            >
+              <span className="font-medium text-cwa-ink">
+                {busy === 'pdf' ? 'Preparing…' : 'Print / Save as PDF'}
+              </span>
+              <span className="block text-[11px] text-cwa-slate">
+                Best for long tables &mdash; paginated, headers repeat
+              </span>
+            </button>
+
+            <button
+              onClick={() => void exportPng()}
+              disabled={busy !== null}
+              className="block w-full border-t border-cwa-mist px-3 py-2.5 text-left text-[12px] hover:bg-cwa-mist disabled:opacity-50"
             >
               <span className="font-medium text-cwa-ink">
                 {busy === 'png' ? 'Rendering…' : 'Download PNG'}
               </span>
-              <span className="block text-[11px] text-cwa-slate">Current view, as shown</span>
+              <span className="block text-[11px] text-cwa-slate">
+                Best for the map and chart
+              </span>
             </button>
+
             <button
-              onClick={exportCsv}
-              disabled={busy !== null}
-              className="block w-full border-t border-cwa-mist px-3 py-2.5 text-left text-[12px] hover:bg-cwa-mist disabled:opacity-50"
-            >
-              <span className="font-medium text-cwa-ink">Download CSV</span>
-              <span className="block text-[11px] text-cwa-slate">Filtered underlying data</span>
-            </button>
-            <button
-              onClick={copyLink}
+              onClick={() => void copyLink()}
               className="block w-full border-t border-cwa-mist px-3 py-2.5 text-left text-[12px] hover:bg-cwa-mist"
             >
-              <span className="font-medium text-cwa-ink">
-                {copied ? 'Link copied' : 'Copy shareable link'}
-              </span>
+              <span className="font-medium text-cwa-ink">Copy shareable link</span>
               <span className="block text-[11px] text-cwa-slate">Reopens these exact filters</span>
             </button>
           </div>
         </>
+      )}
+
+      {note && (
+        <p className="absolute right-0 top-full z-40 mt-1 w-64 rounded border border-amber-300 bg-amber-50 px-2.5 py-2 text-[11px] leading-snug text-amber-900">
+          {note}
+        </p>
       )}
     </div>
   );

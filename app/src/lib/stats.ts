@@ -241,3 +241,104 @@ export function stationRollups(samples: Sample[], keys: ParameterKey[]): Station
 
   return [...map.values()];
 }
+
+/* ---------------------------------------------------------------------------
+ * Conductivity percentiles, shared by the OH EPA reference view and its export.
+ * ------------------------------------------------------------------------- */
+
+export interface ConductivityRow {
+  year: number;
+  basin: string;
+  n: number;
+  min: number | null;
+  p25: number | null;
+  p50: number | null;
+  max: number | null;
+}
+
+export function conductivityPercentiles(samples: Sample[]): ConductivityRow[] {
+  const groups = new Map<string, { year: number; basin: string; values: number[] }>();
+
+  for (const s of samples) {
+    const v = s.values.conductivity;
+    if (typeof v !== 'number' || !s.year || !s.basin) continue;
+    const key = `${s.year}||${s.basin}`;
+    const bucket = groups.get(key);
+    if (bucket) bucket.values.push(v);
+    else groups.set(key, { year: s.year, basin: s.basin, values: [v] });
+  }
+
+  return [...groups.values()]
+    .map(({ year, basin, values }) => {
+      values.sort((a, b) => a - b);
+      return {
+        year,
+        basin,
+        n: values.length,
+        min: values[0] ?? null,
+        p25: percentile(values, 0.25),
+        p50: percentile(values, 0.5),
+        max: values[values.length - 1] ?? null,
+      };
+    })
+    .sort((a, b) => a.year - b.year || a.basin.localeCompare(b.basin));
+}
+
+/* ---------------------------------------------------------------------------
+ * Faceted filter options.
+ *
+ * Stops the filters offering combinations that return nothing. For each
+ * dimension we apply every OTHER active filter, then collect the values that
+ * actually survive - so choosing a station immediately narrows the year list to
+ * the years that station was sampled.
+ * ------------------------------------------------------------------------- */
+
+export type FacetKey = Exclude<keyof Filters, 'parameters'>;
+
+export interface Facets {
+  years: Set<number>;
+  basins: Set<string>;
+  stationIds: Set<string>;
+  organizations: Set<string>;
+  tempRegimes: Set<string>;
+  ecoregions: Set<string>;
+  streamSizes: Set<string>;
+}
+
+const FACET_VALUE: Record<FacetKey, (s: Sample) => string | number | null> = {
+  years: (s) => s.year,
+  basins: (s) => s.basin,
+  stationIds: (s) => s.stationId,
+  organizations: (s) => s.organization,
+  tempRegimes: (s) => s.tempRegime,
+  ecoregions: (s) => s.ecoregion,
+  streamSizes: (s) => s.streamSize,
+};
+
+const FACET_KEYS = Object.keys(FACET_VALUE) as FacetKey[];
+
+export function availableFacets(samples: Sample[], filters: Filters): Facets {
+  const facets = {
+    years: new Set<number>(),
+    basins: new Set<string>(),
+    stationIds: new Set<string>(),
+    organizations: new Set<string>(),
+    tempRegimes: new Set<string>(),
+    ecoregions: new Set<string>(),
+    streamSizes: new Set<string>(),
+  } as Facets;
+
+  for (const target of FACET_KEYS) {
+    // Every filter except the one whose options we are computing.
+    const others: Filters = { ...filters, [target]: [] } as Filters;
+    const subset = filterSamples(samples, others);
+    const bucket = facets[target] as Set<string | number>;
+    const read = FACET_VALUE[target];
+    for (const s of subset) {
+      const v = read(s);
+      if (v !== null) bucket.add(v);
+    }
+  }
+
+  return facets;
+}

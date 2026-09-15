@@ -24,6 +24,12 @@ interface DashboardState {
   filters: Filters;
   /** Parameter charted in the results view (single-select, as in the original). */
   focusParameter: ParameterKey;
+  /**
+   * While true, grouped tables render every row rather than paging them in.
+   * Used for printing and PNG capture, where "what you can see" has to mean
+   * the whole table rather than the first screenful.
+   */
+  exportMode: boolean;
 
   load: (opts?: { bust?: boolean }) => Promise<void>;
   setView: (view: ViewId) => void;
@@ -32,6 +38,7 @@ interface DashboardState {
   setFocusParameter: (key: ParameterKey) => void;
   resetFilters: () => void;
   hydrateFromUrl: () => void;
+  setExportMode: (on: boolean) => void;
 }
 
 /** Where the prebuilt snapshot lives. Overridable for a CDN or preview build. */
@@ -90,6 +97,7 @@ export const useDashboard = create<DashboardState>((set, get) => ({
   view: 'locations',
   filters: { ...EMPTY_FILTERS },
   focusParameter: 'chloride',
+  exportMode: false,
 
   load: async (opts) => {
     set({ loading: true, error: null });
@@ -143,6 +151,8 @@ export const useDashboard = create<DashboardState>((set, get) => ({
     set({ filters });
     pushUrl(get().view, filters, get().focusParameter);
   },
+
+  setExportMode: (exportMode) => set({ exportMode }),
 
   hydrateFromUrl: () => {
     if (typeof window === 'undefined') return;

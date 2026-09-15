@@ -59,18 +59,3 @@ export function StatRows({ stats }: { stats: ParameterStats[] }) {
     </>
   );
 }
-
-/** Turns a stats table into CSV rows, using the canonical labels as-is. */
-export function statsToCsvRows(stats: ParameterStats[], prefix: unknown[] = []): unknown[][] {
-  return stats.map((s) => [
-    ...prefix,
-    s.label,
-    s.mean,
-    s.median,
-    s.min,
-    s.max,
-    s.sampleCount,
-    s.exceedanceCount,
-    s.exceedancePct,
-  ]);
-}

@@ -84,3 +84,107 @@
 .mapboxgl-popup-close-button {
   @apply !px-1.5 !text-cwa-slate hover:!bg-transparent hover:!text-cwa-deep;
 }
+
+/* ---------------------------------------------------------------------------
+ * Print / Save as PDF.
+ *
+ * The right answer for long tables. A 224-station table is ~129,000px tall,
+ * far past what any browser will rasterise into a PNG, but printing paginates
+ * it cleanly and repeats the table header on every page.
+ * ------------------------------------------------------------------------- */
+
+@media print {
+  @page {
+    size: landscape;
+    margin: 12mm;
+  }
+
+  html,
+  body {
+    height: auto !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+
+  /* Chrome that has no meaning on paper. */
+  .print-hide,
+  nav,
+  aside {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  /* Unwrap the app shell so content can flow across pages. */
+  main,
+  main > div,
+  .panel,
+  .print-flow,
+  .print-flow * {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  main {
+    display: block !important;
+    padding: 0 !important;
+    background: #fff !important;
+  }
+
+  .print-surface {
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+
+  /* Repeat column headers on every printed page. */
+  thead {
+    display: table-header-group;
+  }
+
+  tr,
+  img,
+  svg,
+  canvas {
+    break-inside: avoid;
+  }
+
+  section {
+    break-inside: auto;
+  }
+
+  section > header {
+    position: static !important;
+    break-after: avoid;
+  }
+
+  .stat-table {
+    font-size: 9.5pt;
+  }
+
+  .stat-table thead th {
+    position: static !important;
+    background: #eef2f6 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .stat-table tbody td {
+    padding-top: 4px;
+    padding-bottom: 4px;
+  }
+
+  /* Keep exceedance shading legible in print. */
+  .stat-table span,
+  .status-chip {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
+
+/* Only visible on paper. */
+.print-only {
+  display: none;
+}

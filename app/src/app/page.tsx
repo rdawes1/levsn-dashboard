@@ -5,14 +5,15 @@ import { useEffect, useMemo, useRef } from 'react';
 import { ExportMenu } from '@/components/ExportMenu';
 import { FilterRail } from '@/components/FilterRail';
 import { KpiRail } from '@/components/KpiRail';
-import { STAT_HEADERS, statsToCsvRows } from '@/components/StatTable';
+
 import { BasinView } from '@/components/views/BasinView';
 import { ReferenceView } from '@/components/views/ReferenceView';
 import { ResultsView } from '@/components/views/ResultsView';
 import { StationView } from '@/components/views/StationView';
-import { fmtInt } from '@/lib/format';
-import { PARAMETER_BY_KEY, PARAMETERS } from '@/lib/parameters';
-import { filterSamples, groupStats, seriesFor, statsTable } from '@/lib/stats';
+import { buildCsv, describeFilters } from '@/lib/exports';
+import { fmtInt, fmtTimestamp } from '@/lib/format';
+import { PARAMETERS } from '@/lib/parameters';
+import { filterSamples } from '@/lib/stats';
 import { useDashboard, VIEWS } from '@/store/useDashboard';
 
 // Leaflet touches `window` at import time, so the map is client-only.
@@ -119,55 +120,28 @@ export default function DashboardPage() {
     return parts.join('-');
   }, [view, filters.years, filters.basins]);
 
-  /** Builds CSV for whichever view is on screen, using canonical labels. */
+  /** Each tab exports the table it is showing, over the current filters. */
   function getCsv() {
     if (!snapshot) return null;
-
-    if (view === 'basin' || view === 'station') {
-      const keyOf =
-        view === 'basin'
-          ? (s: (typeof samples)[number]) => s.basin
-          : (s: (typeof samples)[number]) => s.stationId;
-      const groupHeader = view === 'basin' ? 'Basin' : 'Station Id';
-      const groups = groupStats(samples, keyOf, filters.parameters);
-      return {
-        headers: [groupHeader, ...STAT_HEADERS],
-        rows: groups.flatMap((g) => statsToCsvRows(g.stats, [g.group])),
-      };
-    }
-
-    if (view === 'results') {
-      const param = PARAMETER_BY_KEY[focusParameter];
-      return {
-        headers: [
-          'Station Id',
-          'Station Name',
-          'Basin',
-          'Collection Date',
-          param.label,
-          'Exceedance',
-        ],
-        rows: seriesFor(samples, focusParameter).map((p) => [
-          p.stationId,
-          p.stationName,
-          p.basin,
-          p.date,
-          p.value,
-          p.exceeds ? 'Exceedance' : 'Non Exceedance',
-        ]),
-      };
-    }
-
-    // Locations and reference views export the overall stats table.
-    return {
-      headers: [...STAT_HEADERS],
-      rows: statsToCsvRows(statsTable(samples, filters.parameters)),
-    };
+    return buildCsv(view, samples, filters, focusParameter);
   }
 
   return (
     <main className="flex h-screen flex-col overflow-hidden bg-cwa-deep">
-      <header className="flex shrink-0 items-baseline gap-3 px-6 pb-3 pt-5">
+      {/* Paper header: only rendered when printing. */}
+      <div className="print-only mb-4 border-b-2 border-cwa-deep pb-2">
+        <h1 className="text-[16px] font-bold uppercase tracking-wide text-cwa-deep">
+          Lake Erie Volunteer Science Network
+        </h1>
+        <p className="mt-0.5 text-[12px] font-semibold text-cwa-ink">{viewLabel}</p>
+        <p className="mt-1 text-[10px] text-cwa-slate">{describeFilters(filters)}</p>
+        <p className="text-[10px] text-cwa-slate">
+          {fmtInt(kpis.samples)} samples &middot; {fmtInt(kpis.sites)} stations
+          {snapshot ? ` \u00B7 Airtable data as of ${fmtTimestamp(snapshot.fetchedAt)}` : ''}
+        </p>
+      </div>
+
+      <header className="flex shrink-0 items-baseline gap-3 px-6 pb-3 pt-5 print-hide">
         <h1 className="text-[19px] font-bold uppercase tracking-wide text-white">
           Lake Erie Volunteer Science Network
         </h1>
@@ -176,8 +150,8 @@ export default function DashboardPage() {
 
       <div className="flex min-h-0 flex-1 gap-0 px-6 pb-2">
         {/* Main panel */}
-        <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-l-panel bg-white">
-          <div className="flex shrink-0 items-center justify-between gap-4 border-b border-cwa-mist px-5 py-3">
+        <div className="print-surface flex min-w-0 flex-1 flex-col overflow-hidden rounded-l-panel bg-white">
+          <div className="flex shrink-0 items-center justify-between gap-4 border-b border-cwa-mist px-5 py-3 print-hide">
             <div className="min-w-0">
               <h2 className="truncate text-[16px] font-semibold text-cwa-deep">{viewLabel}</h2>
               <p className="text-[12px] text-cwa-slate">
@@ -188,7 +162,7 @@ export default function DashboardPage() {
             <ExportMenu targetRef={panelRef} filename={filenameStem} getCsv={getCsv} />
           </div>
 
-          <div ref={panelRef} className="min-h-0 flex-1 overflow-hidden bg-white">
+          <div ref={panelRef} className="print-flow min-h-0 flex-1 overflow-hidden bg-white">
             {loading && (
               <div className="flex h-full items-center justify-center text-[13px] text-cwa-slate">
                 Loading LEVSN data from Airtable&hellip;
@@ -242,7 +216,7 @@ export default function DashboardPage() {
       </div>
 
       {/* View tabs, mirroring the sheet tabs in the existing dashboard */}
-      <nav className="flex shrink-0 gap-1 overflow-x-auto px-6 pb-4 pt-1 scroll-thin">
+      <nav className="flex shrink-0 gap-1 overflow-x-auto px-6 pb-4 pt-1 scroll-thin print-hide">
         {VIEWS.map((v) => (
           <button
             key={v.id}

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { fmtInt } from '@/lib/format';
 import type { GroupedStats } from '@/lib/stats';
 import { STAT_HEADERS, StatRows } from '@/components/StatTable';
+import { useDashboard } from '@/store/useDashboard';
 
 /**
  * Shared scrolling list behind the "by Basin" and "by Station" views.
@@ -35,6 +36,7 @@ export function GroupedStatsList<T extends string>({
   emptyMessage,
 }: Props<T>) {
   const [visible, setVisible] = useState(PAGE);
+  const exportMode = useDashboard((s) => s.exportMode);
   const sentinel = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
 
@@ -65,10 +67,18 @@ export function GroupedStatsList<T extends string>({
     return <p className="px-6 py-16 text-center text-[13px] text-cwa-slate">{emptyMessage}</p>;
   }
 
-  const shown = groups.slice(0, visible);
+  // Printing and PNG capture need the complete table, not the first page of it.
+  const shown = exportMode ? groups : groups.slice(0, visible);
 
   return (
-    <div ref={scroller} className="h-full min-h-0 overflow-y-auto scroll-light">
+    <div
+      ref={scroller}
+      className={
+        exportMode
+          ? 'h-auto min-h-0 overflow-visible'
+          : 'h-full min-h-0 overflow-y-auto scroll-light'
+      }
+    >
       {shown.map(({ group, sampleRows, stats }) => (
         <section key={group} className="mb-6 last:mb-0">
           <header className="sticky top-0 z-20 flex flex-wrap items-baseline gap-x-2 border-b border-cwa-silver bg-white px-5 py-2.5">
@@ -98,7 +108,7 @@ export function GroupedStatsList<T extends string>({
         </section>
       ))}
 
-      {visible < groups.length && (
+      {!exportMode && visible < groups.length && (
         <div ref={sentinel} className="px-5 py-6 text-center text-[12px] text-cwa-slate">
           Showing {fmtInt(visible)} of {fmtInt(groups.length)} &mdash; scroll for more
         </div>
