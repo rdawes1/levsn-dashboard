@@ -169,7 +169,9 @@ export async function loadSnapshot(): Promise<Snapshot> {
     counts: {
       stations: stations.length,
       samples: samples.length,
-      basins: basinName.size,
+      // Basins with at least one station - i.e. basins the dashboard can
+      // actually show data for, not every row in the Basins table.
+      basins: new Set(stations.map((s) => s.basin).filter(Boolean)).size,
       organizations: uniqueSorted(stations.map((s) => s.organization)).length,
     },
   };

@@ -51,6 +51,12 @@ export interface WireSnapshot {
   };
   /** Per station index: [nameIdx, basinIdx, orgIdx, ecoIdx, sizeIdx, regimeIdx, typeIdx, lat, lon] */
   stations: (number | null)[][];
+  /**
+   * Every basin in the Basins table, including any with no stations or samples
+   * yet. Interning alone would silently drop those, leaving `counts.basins`
+   * disagreeing with the basin list the filters show.
+   */
+  allBasins: string[];
   samples: WireSample[];
   counts: Snapshot['counts'];
 }
@@ -125,6 +131,7 @@ export function encodeSnapshot(snap: Snapshot): WireSnapshot {
       dates: dates.values,
     },
     stations,
+    allBasins: snap.basins,
     samples,
     counts: snap.counts,
   };
@@ -216,7 +223,7 @@ export function decodeSnapshot(w: WireSnapshot): Snapshot {
   return {
     samples,
     stations,
-    basins: uniqueSorted(d.basins),
+    basins: uniqueSorted(w.allBasins ?? d.basins),
     organizations: uniqueSorted(stations.map((s) => s.organization)),
     years: [...new Set(samples.map((s) => s.year).filter((y): y is number => y !== null))].sort(
       (a, b) => a - b
