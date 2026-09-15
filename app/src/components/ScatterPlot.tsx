@@ -15,7 +15,8 @@ import type { SeriesPoint } from '@/lib/stats';
  * them, and they stay crisp and selectable.
  */
 
-const PAD = { top: 10, right: 18, bottom: 44, left: 68 };
+const PAD_WIDE = { top: 10, right: 18, bottom: 44, left: 68 };
+const PAD_NARROW = { top: 8, right: 10, bottom: 38, left: 44 };
 const OK = '#2E7D57';
 const ALERT = '#B3261E';
 
@@ -30,6 +31,20 @@ interface Hover {
   point: SeriesPoint;
   x: number;
   y: number;
+}
+
+/**
+ * Axis labels on a phone. Conductivity runs to 5 figures, which overflows the
+ * narrow gutter and gets clipped, so large values are abbreviated instead.
+ */
+function compactTick(v: number): string {
+  const abs = Math.abs(v);
+  if (abs >= 1000) {
+    const k = v / 1000;
+    return `${Number.isInteger(k) ? k : k.toFixed(1)}k`;
+  }
+  if (Number.isInteger(v)) return String(v);
+  return v.toFixed(abs < 10 ? 1 : 0);
 }
 
 /** "Nice" axis bounds so tick labels land on round numbers. */
@@ -64,6 +79,10 @@ export function ScatterPlot({ points, yLabel, formatValue, formatDate }: Props) 
     return () => ro.disconnect();
   }, []);
 
+  // Narrow screens cannot spare 68px of axis gutter.
+  const narrow = size.w < 520;
+  const PAD = narrow ? PAD_NARROW : PAD_WIDE;
+
   const scales = useMemo(() => {
     if (!points.length || size.w <= 0 || size.h <= 0) return null;
 
@@ -89,10 +108,14 @@ export function ScatterPlot({ points, yLabel, formatValue, formatDate }: Props) 
     const yTicks: number[] = [];
     for (let v = y.lo; v <= y.hi + y.step / 2; v += y.step) yTicks.push(Number(v.toFixed(10)));
 
-    const xTicks = Array.from({ length: 6 }, (_, i) => Math.round(xMin + ((xMax - xMin) * i) / 5));
+    const tickCount = size.w < 520 ? 3 : 6;
+    const xTicks = Array.from({ length: tickCount }, (_, i) =>
+      Math.round(xMin + ((xMax - xMin) * i) / (tickCount - 1))
+    );
 
     return { xOf, yOf, xMin, xMax, yTicks, xTicks, plotW, plotH };
-  }, [points, size]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [points, size, PAD]);
 
   // Draw the cloud.
   useEffect(() => {
@@ -112,7 +135,7 @@ export function ScatterPlot({ points, yLabel, formatValue, formatDate }: Props) 
 
     // Dense clouds get smaller, more transparent marks so structure stays visible.
     const dense = points.length > 900;
-    const r = dense ? 2.6 : 5;
+    const r = (dense ? 2.6 : 5) * (size.w < 520 ? 0.85 : 1);
     const alpha = dense ? 0.5 : 0.75;
 
     // Non-exceedances first so exceedances read on top.
@@ -206,14 +229,14 @@ export function ScatterPlot({ points, yLabel, formatValue, formatDate }: Props) 
                   strokeDasharray="2 4"
                 />
                 <text
-                  x={PAD.left - 8}
+                  x={PAD.left - 6}
                   y={y + 4}
                   textAnchor="end"
                   fill="#3A4B64"
-                  fontSize="11"
+                  fontSize={narrow ? 9.5 : 11}
                   style={{ fontVariantNumeric: 'tabular-nums' }}
                 >
-                  {formatValue(v)}
+                  {narrow ? compactTick(v) : formatValue(v)}
                 </text>
               </g>
             );
@@ -229,7 +252,7 @@ export function ScatterPlot({ points, yLabel, formatValue, formatDate }: Props) 
                 y={size.h - PAD.bottom + 18}
                 textAnchor={i === 0 ? 'start' : i === scales.xTicks.length - 1 ? 'end' : 'middle'}
                 fill="#3A4B64"
-                fontSize="11"
+                fontSize={narrow ? 9.5 : 11}
               >
                 {new Date(t).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
               </text>
@@ -257,17 +280,17 @@ export function ScatterPlot({ points, yLabel, formatValue, formatDate }: Props) 
             y={size.h - 6}
             textAnchor="middle"
             fill="#3A4B64"
-            fontSize="11"
+            fontSize={narrow ? 9.5 : 11}
           >
             Collection Date
           </text>
           <text
-            x={14}
+            x={narrow ? 10 : 14}
             y={PAD.top + scales.plotH / 2}
             textAnchor="middle"
             fill="#3A4B64"
-            fontSize="11"
-            transform={`rotate(-90 14 ${PAD.top + scales.plotH / 2})`}
+            fontSize={narrow ? 9.5 : 11}
+            transform={`rotate(-90 ${narrow ? 10 : 14} ${PAD.top + scales.plotH / 2})`}
           >
             {yLabel}
           </text>

@@ -6,7 +6,7 @@
  *   npm run verify -- --url https://levsn.example.org
  */
 import { readFile } from 'node:fs/promises';
-import { PARAMETERS } from '../src/lib/parameters';
+import { PARAMETERS, VISIBLE_PARAMETERS } from '../src/lib/parameters';
 import { filterSamples, groupStats, EMPTY_FILTERS } from '../src/lib/stats';
 import type { Snapshot } from '../src/lib/types';
 import { decodeSnapshot, type WireSnapshot } from '../src/lib/wire';
@@ -15,6 +15,9 @@ import { decodeSnapshot, type WireSnapshot } from '../src/lib/wire';
 const urlArg = process.argv.indexOf('--url');
 const REMOTE = urlArg > -1 ? process.argv[urlArg + 1] : null;
 const LOCAL_SNAPSHOT = 'public/data/snapshot.json';
+
+/** Hidden from the public dashboard per LEVSN programme guidance. */
+const HIDDEN_LABELS = ['Chloride', 'Total Dissolved Solids'];
 
 /** Sourced from the published dashboard: Basin = Big Sister Creek, Year = 2025. */
 const EXPECTED_BIG_SISTER_2025: Record<string, [number, number, number, number]> = {
@@ -35,9 +38,13 @@ const EXPECTED_TOTALS = { samples: 5306, stationRecords: 225 };
 /** Exceedance counts cross-checked against Airtable's own Basins rollups. */
 const EXPECTED_EXCEEDANCES: { basin: string; year: number; label: string; count: number }[] = [
   { basin: 'Buffalo', year: 2025, label: 'Conductivity Biocondition', count: 21 },
-  { basin: 'Buffalo', year: 2025, label: 'Total Dissolved Solids', count: 25 },
+  { basin: 'Buffalo', year: 2025, label: 'Salinity', count: 1 },
+  { basin: 'Buffalo', year: 2025, label: 'Water Temperature', count: 0 },
+  { basin: 'Buffalo', year: 2025, label: 'Dissolved Oxygen', count: 0 },
   { basin: 'Big Sister Creek', year: 2025, label: 'Conductivity Biocondition', count: 7 },
-  { basin: 'Big Sister Creek', year: 2025, label: 'Total Dissolved Solids', count: 8 },
+  { basin: 'Big Sister Creek', year: 2025, label: 'Salinity', count: 0 },
+  { basin: 'Big Sister Creek', year: 2025, label: 'Water Temperature', count: 6 },
+  { basin: 'Big Sister Creek', year: 2025, label: 'pH', count: 0 },
 ];
 
 let failures = 0;
@@ -82,15 +89,34 @@ async function main() {
     `got ${snap.stations.length}`
   );
 
-  console.log('\nParameter labels (must match the published dashboard exactly)');
+  console.log('\nParameter registry (labels must match the published dashboard exactly)');
   const expectedLabels = Object.keys(EXPECTED_BIG_SISTER_2025);
   for (const label of expectedLabels) {
     check(label, PARAMETERS.some((p) => p.label === label), 'label missing or renamed');
   }
   check(
-    `exactly ${expectedLabels.length} parameters`,
+    `registry holds all ${expectedLabels.length} parameters`,
     PARAMETERS.length === expectedLabels.length,
     `got ${PARAMETERS.length}`
+  );
+
+  console.log('\nPublic visibility');
+  for (const label of HIDDEN_LABELS) {
+    check(
+      `${label} hidden from public view`,
+      !VISIBLE_PARAMETERS.some((p) => p.label === label),
+      'still visible'
+    );
+  }
+  check(
+    `${expectedLabels.length - HIDDEN_LABELS.length} parameters shown publicly`,
+    VISIBLE_PARAMETERS.length === expectedLabels.length - HIDDEN_LABELS.length,
+    `got ${VISIBLE_PARAMETERS.length}`
+  );
+  check(
+    'Conductivity TDS remains visible',
+    VISIBLE_PARAMETERS.some((p) => p.label === 'Conductivity TDS'),
+    'missing'
   );
 
   console.log('\nBig Sister Creek / 2025 summary statistics');
@@ -103,6 +129,11 @@ async function main() {
   if (!bsGroup) {
     check('basin group present', false, 'no rows matched');
   } else {
+    check(
+      'summary table omits hidden parameters',
+      !bsGroup.stats.some((s) => HIDDEN_LABELS.includes(s.label)),
+      'a hidden parameter appeared in the table'
+    );
     for (const stat of bsGroup.stats) {
       const exp = EXPECTED_BIG_SISTER_2025[stat.label];
       if (!exp) {

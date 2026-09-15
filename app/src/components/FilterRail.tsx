@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import { PARAMETERS } from '@/lib/parameters';
+import { VISIBLE_PARAMETERS } from '@/lib/parameters';
 import { availableFacets, type Facets, type Filters } from '@/lib/stats';
 import { useDashboard } from '@/store/useDashboard';
 
@@ -93,7 +93,13 @@ function FilterGroup({
   );
 }
 
-export function FilterRail() {
+interface RailProps {
+  /** 'rail' is the fixed desktop column; 'drawer' is the slide-over used below lg. */
+  variant?: 'rail' | 'drawer';
+  onClose?: () => void;
+}
+
+export function FilterRail({ variant = 'rail', onClose }: RailProps = {}) {
   const snapshot = useDashboard((s) => s.snapshot);
   const filters = useDashboard((s) => s.filters);
   const resetFilters = useDashboard((s) => s.resetFilters);
@@ -128,19 +134,37 @@ export function FilterRail() {
 
   const activeCount = Object.values(filters).reduce((n, v) => n + (v as unknown[]).length, 0);
 
+  const shell =
+    variant === 'drawer'
+      ? 'flex h-full w-full max-w-[320px] flex-col bg-cwa-deeper'
+      : 'hidden h-full w-[248px] shrink-0 flex-col border-l border-white/10 bg-cwa-deeper lg:flex print-hide';
+
   return (
-    <aside className="flex h-full w-[248px] shrink-0 flex-col border-l border-white/10 bg-cwa-deeper print-hide">
-      <header className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+    <aside className={shell}>
+      <header className="flex items-center justify-between gap-2 border-b border-white/10 px-4 py-3">
         <h2 className="text-[13px] font-semibold text-white">Filters</h2>
-        {activeCount > 0 && (
-          <button
-            onClick={resetFilters}
-            className="rounded border border-white/25 px-2 py-0.5 text-[11px] text-white/80
-                       transition-colors hover:border-cwa-cyan hover:text-cwa-cyan"
-          >
-            Clear {activeCount}
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {activeCount > 0 && (
+            <button
+              onClick={resetFilters}
+              className="rounded border border-white/25 px-2 py-0.5 text-[11px] text-white/80
+                         transition-colors hover:border-cwa-cyan hover:text-cwa-cyan"
+            >
+              Clear {activeCount}
+            </button>
+          )}
+          {onClose && (
+            <button
+              onClick={onClose}
+              aria-label="Close filters"
+              className="rounded p-1 text-white/70 transition-colors hover:text-white lg:hidden"
+            >
+              <svg viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <path d="M4 4l8 8M12 4l-8 8" strokeLinecap="round" />
+              </svg>
+            </button>
+          )}
+        </div>
       </header>
 
       <div className="flex-1 overflow-y-auto px-4 py-4 scroll-thin">
@@ -173,9 +197,9 @@ export function FilterRail() {
         <FilterGroup
           title="Parameter"
           filterKey="parameters"
-          options={PARAMETERS.map((p) => p.key)}
+          options={VISIBLE_PARAMETERS.map((p) => p.key)}
           selected={filters.parameters}
-          labels={Object.fromEntries(PARAMETERS.map((p) => [p.key, p.label]))}
+          labels={Object.fromEntries(VISIBLE_PARAMETERS.map((p) => [p.key, p.label]))}
         />
         <FilterGroup
           title="Temp Regime"

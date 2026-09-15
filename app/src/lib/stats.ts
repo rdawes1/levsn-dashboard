@@ -1,4 +1,9 @@
-import { PARAMETERS, type ParameterDef, type ParameterKey } from './parameters';
+import {
+  VISIBLE_PARAMETERS,
+  VISIBLE_PARAMETER_KEYS,
+  type ParameterDef,
+  type ParameterKey,
+} from './parameters';
 import type { Sample } from './types';
 
 /**
@@ -120,10 +125,13 @@ export function statsFor(samples: Sample[], param: ParameterDef): ParameterStats
   };
 }
 
-/** Stats for a set of parameters, in canonical registry order. */
+/** Stats for a set of parameters, in canonical registry order. Hidden
+ *  parameters never appear, whatever is passed in. */
 export function statsTable(samples: Sample[], keys: ParameterKey[]): ParameterStats[] {
   const wanted = keys.length ? new Set<ParameterKey>(keys) : null;
-  return PARAMETERS.filter((p) => !wanted || wanted.has(p.key)).map((p) => statsFor(samples, p));
+  return VISIBLE_PARAMETERS.filter((p) => !wanted || wanted.has(p.key)).map((p) =>
+    statsFor(samples, p)
+  );
 }
 
 export interface GroupedStats<T> {
@@ -202,7 +210,7 @@ export interface StationRollup {
 }
 
 export function stationRollups(samples: Sample[], keys: ParameterKey[]): StationRollup[] {
-  const active = keys.length ? keys : PARAMETERS.map((p) => p.key);
+  const active = keys.length ? keys : VISIBLE_PARAMETER_KEYS;
   const map = new Map<string, StationRollup>();
 
   for (const s of samples) {

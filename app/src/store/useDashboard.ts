@@ -1,19 +1,20 @@
 'use client';
 
 import { create } from 'zustand';
-import { ALL_PARAMETER_KEYS, type ParameterKey } from '@/lib/parameters';
+import { VISIBLE_PARAMETER_KEYS, type ParameterKey } from '@/lib/parameters';
 import { EMPTY_FILTERS, type Filters } from '@/lib/stats';
 import type { Snapshot } from '@/lib/types';
 import { decodeSnapshot, type WireSnapshot } from '@/lib/wire';
 
 export type ViewId = 'locations' | 'basin' | 'station' | 'results' | 'reference';
 
-export const VIEWS: { id: ViewId; label: string }[] = [
-  { id: 'locations', label: 'LEVSN Monitoring Locations' },
-  { id: 'basin', label: 'Summary Statistics and Exceedances by Basin' },
-  { id: 'station', label: 'Summary Statistics and Exceedances by Station' },
-  { id: 'results', label: 'Sampling Results by Basin, Station and Temp Regime' },
-  { id: 'reference', label: 'Conductivity Results to OH EPA Ref. Survey' },
+/** `short` is used where the full sheet name will not fit - phone tabs. */
+export const VIEWS: { id: ViewId; label: string; short: string }[] = [
+  { id: 'locations', label: 'LEVSN Monitoring Locations', short: 'Map' },
+  { id: 'basin', label: 'Summary Statistics and Exceedances by Basin', short: 'By Basin' },
+  { id: 'station', label: 'Summary Statistics and Exceedances by Station', short: 'By Station' },
+  { id: 'results', label: 'Sampling Results by Basin, Station and Temp Regime', short: 'Results' },
+  { id: 'reference', label: 'Conductivity Results to OH EPA Ref. Survey', short: 'OH EPA' },
 ];
 
 interface DashboardState {
@@ -40,6 +41,9 @@ interface DashboardState {
   hydrateFromUrl: () => void;
   setExportMode: (on: boolean) => void;
 }
+
+/** First publicly visible parameter, used as the default chart selection. */
+const DEFAULT_FOCUS: ParameterKey = VISIBLE_PARAMETER_KEYS[0];
 
 /** Where the prebuilt snapshot lives. Overridable for a CDN or preview build. */
 const DATA_URL = process.env.NEXT_PUBLIC_DATA_URL ?? '/data/snapshot.json';
@@ -96,7 +100,7 @@ export const useDashboard = create<DashboardState>((set, get) => ({
   error: null,
   view: 'locations',
   filters: { ...EMPTY_FILTERS },
-  focusParameter: 'chloride',
+  focusParameter: DEFAULT_FOCUS,
   exportMode: false,
 
   load: async (opts) => {
@@ -169,7 +173,7 @@ export const useDashboard = create<DashboardState>((set, get) => ({
       if (key === 'years') filters.years = parts.map(Number).filter((n) => !Number.isNaN(n));
       else if (key === 'parameters')
         filters.parameters = parts.filter((p): p is ParameterKey =>
-          (ALL_PARAMETER_KEYS as string[]).includes(p)
+          (VISIBLE_PARAMETER_KEYS as string[]).includes(p)
         );
       else (filters[key] as string[]) = parts;
     }
@@ -178,7 +182,7 @@ export const useDashboard = create<DashboardState>((set, get) => ({
       filters,
       view: VIEWS.some((v) => v.id === view) ? (view as ViewId) : 'locations',
       focusParameter:
-        focus && (ALL_PARAMETER_KEYS as string[]).includes(focus) ? focus : 'chloride',
+        focus && (VISIBLE_PARAMETER_KEYS as string[]).includes(focus) ? focus : DEFAULT_FOCUS,
     });
   },
 }));

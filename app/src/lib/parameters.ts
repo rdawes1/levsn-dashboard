@@ -38,6 +38,16 @@ export interface ParameterDef {
   threshold: string;
   /** Number of decimal places used when displaying values. */
   precision: number;
+  /**
+   * Whether this parameter is shown in the public dashboard.
+   *
+   * Chloride and Total Dissolved Solids are computed and kept in the data, but
+   * excluded from public view per LEVSN programme guidance - Chloride is to be
+   * entered directly by volunteers rather than derived, and Conductivity TDS is
+   * the TDS measure the programme reports. Flip these to true to restore them;
+   * nothing else needs to change.
+   */
+  publicVisible: boolean;
 }
 
 export const PARAMETERS: ParameterDef[] = [
@@ -50,6 +60,7 @@ export const PARAMETERS: ParameterDef[] = [
     unit: 'mg/L',
     threshold: 'Exceedance when Chloride > 150 mg/L',
     precision: 2,
+    publicVisible: false,
   },
   {
     key: 'conductivity',
@@ -60,6 +71,7 @@ export const PARAMETERS: ParameterDef[] = [
     unit: 'µS/cm',
     threshold: 'Exceedance when Conductivity ≥ 1,500 µS/cm',
     precision: 2,
+    publicVisible: true,
   },
   {
     key: 'conductivityBiocondition',
@@ -70,6 +82,7 @@ export const PARAMETERS: ParameterDef[] = [
     unit: 'µS/cm',
     threshold: 'Exceedance when Conductivity ≥ 412 µS/cm (biological condition benchmark)',
     precision: 2,
+    publicVisible: true,
   },
   {
     key: 'conductivityTds',
@@ -80,6 +93,7 @@ export const PARAMETERS: ParameterDef[] = [
     unit: 'mg/L',
     threshold: 'Exceedance when TDS > 1,500 mg/L',
     precision: 2,
+    publicVisible: true,
   },
   {
     key: 'dissolvedOxygen',
@@ -90,6 +104,7 @@ export const PARAMETERS: ParameterDef[] = [
     unit: 'mg/L',
     threshold: 'Exceedance when DO ≤ 5 mg/L (Warm) or ≤ 7 mg/L (Cold)',
     precision: 2,
+    publicVisible: true,
   },
   {
     key: 'ph',
@@ -100,6 +115,7 @@ export const PARAMETERS: ParameterDef[] = [
     unit: 'su',
     threshold: 'Exceedance when pH < 6.5 or pH > 9',
     precision: 2,
+    publicVisible: true,
   },
   {
     key: 'salinity',
@@ -110,6 +126,7 @@ export const PARAMETERS: ParameterDef[] = [
     unit: 'mg/L',
     threshold: 'Exceedance when Salinity ≥ 1,000 mg/L',
     precision: 2,
+    publicVisible: true,
   },
   {
     key: 'totalDissolvedSolids',
@@ -120,6 +137,7 @@ export const PARAMETERS: ParameterDef[] = [
     unit: 'mg/L',
     threshold: 'Exceedance when TDS > 200 mg/L',
     precision: 2,
+    publicVisible: false,
   },
   {
     key: 'waterTemperature',
@@ -130,6 +148,7 @@ export const PARAMETERS: ParameterDef[] = [
     unit: '°C',
     threshold: 'Exceedance when temperature exceeds the month + temperature-regime threshold',
     precision: 2,
+    publicVisible: true,
   },
 ];
 
@@ -137,7 +156,18 @@ export const PARAMETER_BY_KEY: Record<ParameterKey, ParameterDef> = Object.fromE
   PARAMETERS.map((p) => [p.key, p])
 ) as Record<ParameterKey, ParameterDef>;
 
-/** Labels in the exact order the existing dashboard lists them. */
-export const PARAMETER_LABELS = PARAMETERS.map((p) => p.label);
+/**
+ * The parameters the dashboard actually shows. Everything user-facing - tables,
+ * filters, charts, exports - reads from this, while PARAMETERS stays the
+ * complete registry so the wire format and stored data are unaffected.
+ */
+export const VISIBLE_PARAMETERS = PARAMETERS.filter((p) => p.publicVisible);
 
+/** Labels in the exact order the existing dashboard lists them. */
+export const PARAMETER_LABELS = VISIBLE_PARAMETERS.map((p) => p.label);
+
+/** Every key, including hidden ones. Wire format ordering depends on this. */
 export const ALL_PARAMETER_KEYS = PARAMETERS.map((p) => p.key);
+
+/** Keys safe to display. */
+export const VISIBLE_PARAMETER_KEYS = VISIBLE_PARAMETERS.map((p) => p.key);

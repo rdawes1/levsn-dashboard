@@ -24,16 +24,17 @@
   }
 
   .stat-table {
-    @apply w-full border-collapse text-[13px];
+    @apply w-full border-collapse text-[12px] sm:text-[13px];
   }
 
   .stat-table thead th {
-    @apply sticky top-0 z-10 border-b border-cwa-silver bg-white px-3 py-2.5
-           text-left text-[11px] font-semibold uppercase tracking-wider text-cwa-slate;
+    @apply sticky top-0 z-10 border-b border-cwa-silver bg-white px-2 py-2
+           text-left text-[10px] font-semibold uppercase tracking-wider text-cwa-slate
+           sm:px-3 sm:py-2.5 sm:text-[11px];
   }
 
   .stat-table tbody td {
-    @apply border-b border-cwa-mist px-3 py-2.5 align-middle;
+    @apply border-b border-cwa-mist px-2 py-2 align-middle sm:px-3 sm:py-2.5;
   }
 
   .stat-table tbody tr:nth-child(even) {

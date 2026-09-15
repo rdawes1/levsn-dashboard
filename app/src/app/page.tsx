@@ -1,7 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ExportMenu } from '@/components/ExportMenu';
 import { FilterRail } from '@/components/FilterRail';
 import { KpiRail } from '@/components/KpiRail';
@@ -12,7 +12,7 @@ import { ResultsView } from '@/components/views/ResultsView';
 import { StationView } from '@/components/views/StationView';
 import { buildCsv, describeFilters } from '@/lib/exports';
 import { fmtInt, fmtTimestamp } from '@/lib/format';
-import { PARAMETERS } from '@/lib/parameters';
+import { VISIBLE_PARAMETER_KEYS } from '@/lib/parameters';
 import { filterSamples } from '@/lib/stats';
 import { useDashboard, VIEWS } from '@/store/useDashboard';
 
@@ -41,6 +41,17 @@ export default function DashboardPage() {
   } = useDashboard();
 
   const panelRef = useRef<HTMLDivElement>(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
+  // Close the filter drawer on Escape.
+  useEffect(() => {
+    if (!filtersOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setFiltersOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [filtersOpen]);
 
   useEffect(() => {
     hydrateFromUrl();
@@ -85,9 +96,7 @@ export default function DashboardPage() {
     const stationIds = new Set(registry.map((st) => st.stationId).filter(Boolean));
     const basins = new Set(registry.map((st) => st.basin).filter(Boolean));
 
-    const active = filters.parameters.length
-      ? filters.parameters
-      : PARAMETERS.map((p) => p.key);
+    const active = filters.parameters.length ? filters.parameters : VISIBLE_PARAMETER_KEYS;
 
     let evaluated = 0;
     let exceeded = 0;
@@ -111,6 +120,11 @@ export default function DashboardPage() {
 
   const viewLabel = VIEWS.find((v) => v.id === view)?.label ?? '';
 
+  const activeFilterCount = useMemo(
+    () => Object.values(filters).reduce((n, v) => n + (v as unknown[]).length, 0),
+    [filters]
+  );
+
   const filenameStem = useMemo(() => {
     const parts = ['levsn', view];
     if (filters.years.length) parts.push(filters.years.join('-'));
@@ -127,7 +141,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <main className="flex h-screen flex-col overflow-hidden bg-cwa-deep">
+    <main className="flex h-[100dvh] flex-col overflow-hidden bg-cwa-deep">
       {/* Paper header: only rendered when printing. */}
       <div className="print-only mb-4 border-b-2 border-cwa-deep pb-2">
         <h1 className="text-[16px] font-bold uppercase tracking-wide text-cwa-deep">
@@ -141,25 +155,61 @@ export default function DashboardPage() {
         </p>
       </div>
 
-      <header className="flex shrink-0 items-baseline gap-3 px-6 pb-3 pt-5 print-hide">
-        <h1 className="text-[19px] font-bold uppercase tracking-wide text-white">
+      <header className="flex shrink-0 flex-wrap items-baseline gap-x-3 px-3 pb-2 pt-3 sm:px-6 sm:pb-3 sm:pt-5 print-hide">
+        <h1 className="text-[14px] font-bold uppercase tracking-wide text-white sm:text-[19px]">
           Lake Erie Volunteer Science Network
         </h1>
-        <span className="text-[13px] text-cwa-cyan">Water Quality Dashboard</span>
+        <span className="text-[11px] text-cwa-cyan sm:text-[13px]">Water Quality Dashboard</span>
       </header>
 
-      <div className="flex min-h-0 flex-1 gap-0 px-6 pb-2">
+      {/* Compact KPI band, below the desktop breakpoint only. */}
+      <div className="lg:hidden">
+        <KpiRail
+          layout="strip"
+          sitesMonitored={kpis.sites}
+          samplesCollected={kpis.samples}
+          basinsCovered={kpis.basins}
+          exceedancePct={kpis.exceedancePct}
+          fetchedAt={snapshot?.fetchedAt ?? null}
+          onRefresh={() => void load({ bust: true })}
+          refreshing={loading}
+        />
+      </div>
+
+      <div className="flex min-h-0 flex-1 gap-0 px-0 pb-0 sm:px-3 lg:px-6 lg:pb-2">
         {/* Main panel */}
-        <div className="print-surface flex min-w-0 flex-1 flex-col overflow-hidden rounded-l-panel bg-white">
-          <div className="flex shrink-0 items-center justify-between gap-4 border-b border-cwa-mist px-5 py-3 print-hide">
+        <div className="print-surface flex min-w-0 flex-1 flex-col overflow-hidden bg-white sm:rounded-l-panel">
+          <div className="flex shrink-0 items-center justify-between gap-2 border-b border-cwa-mist px-3 py-2 sm:px-5 sm:py-3 print-hide">
             <div className="min-w-0">
-              <h2 className="truncate text-[16px] font-semibold text-cwa-deep">{viewLabel}</h2>
-              <p className="text-[12px] text-cwa-slate">
+              <h2 className="truncate text-[13px] font-semibold text-cwa-deep sm:text-[16px]">
+                {viewLabel}
+              </h2>
+              <p className="truncate text-[11px] text-cwa-slate sm:text-[12px]">
                 {fmtInt(kpis.samples)} samples &middot; {fmtInt(kpis.sites)} stations
                 {filters.basins.length === 1 ? ` · ${filters.basins[0].trim()}` : ''}
               </p>
             </div>
-            <ExportMenu targetRef={panelRef} filename={filenameStem} getCsv={getCsv} />
+
+            <div className="flex shrink-0 items-center gap-2">
+              {/* Filters live in a drawer below the desktop breakpoint. */}
+              <button
+                onClick={() => setFiltersOpen(true)}
+                className="flex items-center gap-1.5 rounded border border-cwa-silver px-2.5 py-1.5
+                           text-[12px] font-medium text-cwa-slate transition-colors
+                           hover:border-cwa-cyan hover:text-cwa-deep lg:hidden"
+              >
+                <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M2 4h12M4.5 8h7M6.5 12h3" strokeLinecap="round" />
+                </svg>
+                Filters
+                {activeFilterCount > 0 && (
+                  <span className="rounded-full bg-cwa-deep px-1.5 text-[10px] font-semibold text-white">
+                    {activeFilterCount}
+                  </span>
+                )}
+              </button>
+              <ExportMenu targetRef={panelRef} filename={filenameStem} getCsv={getCsv} />
+            </div>
           </div>
 
           <div ref={panelRef} className="print-flow min-h-0 flex-1 overflow-hidden bg-white">
@@ -216,21 +266,37 @@ export default function DashboardPage() {
       </div>
 
       {/* View tabs, mirroring the sheet tabs in the existing dashboard */}
-      <nav className="flex shrink-0 gap-1 overflow-x-auto px-6 pb-4 pt-1 scroll-thin print-hide">
+      <nav className="flex shrink-0 gap-1 overflow-x-auto px-3 pb-2 pt-1 sm:px-6 sm:pb-4 scroll-thin print-hide">
         {VIEWS.map((v) => (
           <button
             key={v.id}
             onClick={() => setView(v.id)}
-            className={`shrink-0 rounded-b border-t-2 px-3.5 py-2 text-[12px] transition-colors ${
+            title={v.label}
+            className={`shrink-0 rounded-b border-t-2 px-2.5 py-2 text-[12px] transition-colors sm:px-3.5 ${
               v.id === view
                 ? 'border-cwa-cyan bg-white/10 font-medium text-white'
                 : 'border-transparent text-white/65 hover:bg-white/5 hover:text-white'
             }`}
           >
-            {v.label}
+            <span className="lg:hidden">{v.short}</span>
+            <span className="hidden lg:inline">{v.label}</span>
           </button>
         ))}
       </nav>
+
+      {/* Filter drawer, below the desktop breakpoint. */}
+      {filtersOpen && (
+        <div className="fixed inset-0 z-50 flex justify-end lg:hidden print-hide">
+          <div
+            className="absolute inset-0 bg-cwa-navy/60"
+            onClick={() => setFiltersOpen(false)}
+            aria-hidden="true"
+          />
+          <div className="relative h-full w-[86%] max-w-[320px] shadow-panel">
+            <FilterRail variant="drawer" onClose={() => setFiltersOpen(false)} />
+          </div>
+        </div>
+      )}
     </main>
   );
 }

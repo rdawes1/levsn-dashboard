@@ -1,10 +1,17 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
   title: 'Lake Erie Volunteer Science Network | Water Quality Dashboard',
   description:
     'Live water quality monitoring results from the Lake Erie Volunteer Science Network, a program of the Cleveland Water Alliance.',
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  // The dashboard is dense; allow zoom rather than trapping people on a phone.
+  maximumScale: 5,
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

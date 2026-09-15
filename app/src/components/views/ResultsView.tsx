@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import { ScatterPlot } from '@/components/ScatterPlot';
 import { fmt, fmtDate, fmtInt } from '@/lib/format';
-import { PARAMETERS, PARAMETER_BY_KEY, type ParameterKey } from '@/lib/parameters';
+import { VISIBLE_PARAMETERS, PARAMETER_BY_KEY, type ParameterKey } from '@/lib/parameters';
 import { seriesFor } from '@/lib/stats';
 import type { Sample } from '@/lib/types';
 
@@ -27,7 +27,7 @@ export function ResultsView({ samples, focusParameter, onFocusChange }: Props) {
           <span className="mr-1 text-[11px] font-semibold uppercase tracking-wider text-cwa-slate">
             Parameter
           </span>
-          {PARAMETERS.map((p) => (
+          {VISIBLE_PARAMETERS.map((p) => (
             <button
               key={p.key}
               onClick={() => onFocusChange(p.key)}

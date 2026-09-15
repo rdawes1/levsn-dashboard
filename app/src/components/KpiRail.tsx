@@ -4,6 +4,8 @@ import { fmtInt, fmtPct, fmtTimestamp } from '@/lib/format';
 import { RefreshFromAirtable } from '@/components/RefreshFromAirtable';
 
 interface Props {
+  /** 'rail' is the desktop column; 'strip' is the horizontal band used below lg. */
+  layout?: 'rail' | 'strip';
   sitesMonitored: number;
   samplesCollected: number;
   basinsCovered: number;
@@ -13,7 +15,25 @@ interface Props {
   refreshing: boolean;
 }
 
-function Kpi({ label, value, hint }: { label: string; value: string; hint?: string }) {
+function Kpi({
+  label,
+  value,
+  hint,
+  compact,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  compact?: boolean;
+}) {
+  if (compact) {
+    return (
+      <div className="shrink-0 px-4 py-2 text-center">
+        <p className="text-[10px] font-medium uppercase tracking-wide text-white/70">{label}</p>
+        <p className="tnum text-[20px] font-bold leading-tight text-white">{value}</p>
+      </div>
+    );
+  }
   return (
     <div className="px-6 py-7 text-center">
       <p className="text-[13px] font-medium leading-snug text-white/85">{label}</p>
@@ -26,6 +46,7 @@ function Kpi({ label, value, hint }: { label: string; value: string; hint?: stri
 }
 
 export function KpiRail({
+  layout = 'rail',
   sitesMonitored,
   samplesCollected,
   basinsCovered,
@@ -34,8 +55,45 @@ export function KpiRail({
   onRefresh,
   refreshing,
 }: Props) {
+  if (layout === 'strip') {
+    return (
+      <div className="flex shrink-0 items-center gap-1 overflow-x-auto border-y border-white/10 bg-cwa-deep/60 scroll-thin print-hide">
+        <Kpi compact label="Sites" value={fmtInt(sitesMonitored)} />
+        <span className="h-7 w-px shrink-0 bg-white/15" />
+        <Kpi compact label="Samples" value={fmtInt(samplesCollected)} />
+        <span className="h-7 w-px shrink-0 bg-white/15" />
+        <Kpi compact label="Basins" value={fmtInt(basinsCovered)} />
+        <span className="h-7 w-px shrink-0 bg-white/15" />
+        <Kpi compact label="Exceedance" value={fmtPct(exceedancePct, 1)} />
+        <div className="ml-auto flex shrink-0 items-center gap-2 px-3">
+          <span className="whitespace-nowrap text-[10px] text-white/45">
+            {fetchedAt ? fmtTimestamp(fetchedAt) : 'Loading\u2026'}
+          </span>
+          <button
+            onClick={onRefresh}
+            disabled={refreshing}
+            aria-label="Check for updated data"
+            className="rounded border border-white/25 p-1 text-white/80 transition-colors
+                       hover:border-cwa-cyan hover:text-cwa-cyan disabled:opacity-50"
+          >
+            <svg
+              viewBox="0 0 16 16"
+              aria-hidden="true"
+              className={`h-3 w-3 ${refreshing ? 'animate-spin' : ''}`}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.6"
+            >
+              <path d="M14 8a6 6 0 1 1-1.8-4.3M14 2v3.5h-3.5" strokeLinecap="round" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <aside className="flex w-[200px] shrink-0 flex-col justify-between border-l border-white/10 bg-cwa-deep">
+    <aside className="hidden w-[200px] shrink-0 flex-col justify-between border-l border-white/10 bg-cwa-deep lg:flex print-hide">
       <div className="divide-y divide-white/10">
         <Kpi label="Sites Monitored" value={fmtInt(sitesMonitored)} />
         <Kpi label="Samples Collected" value={fmtInt(samplesCollected)} />
