@@ -1,0 +1,28 @@
+# Cloudflare Workers - free tier.
+#
+# The dashboard is a static site reading a prebuilt snapshot, so nothing runs
+# per request except one tiny endpoint (/api/refresh) that asks GitHub Actions
+# to re-pull Airtable on demand. Everything else is served straight from the
+# edge, which is what keeps this free and instant.
+
+name = "levsn-dashboard"
+main = "worker/index.ts"
+compatibility_date = "2025-09-01"
+
+[assets]
+directory = "./out"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+
+[observability]
+enabled = true
+
+# Secrets (set with `npx wrangler secret put <NAME>`, never committed):
+#   GITHUB_TOKEN  - fine-grained PAT, Actions: read and write, this repo only
+#   GITHUB_REPO   - "owner/repo"
+#   REFRESH_KEY   - shared passphrase the dashboard must present
+#
+# Optional plain vars:
+[vars]
+GITHUB_WORKFLOW = "refresh-and-deploy.yml"
+GITHUB_REF = "main"

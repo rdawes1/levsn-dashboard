@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "levsn",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "app", "run", "dev"],
+      "port": 4310
+    },
+    {
+      "name": "levsn-static",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["--yes", "serve", "app/out", "-l", "4311"],
+      "port": 4311
+    }
+  ]
+}

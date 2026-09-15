@@ -1,0 +1,78 @@
+name: Refresh LEVSN snapshot and deploy
+
+# The Airtable pull and data transform happen HERE, not on Cloudflare.
+# Cloudflare Workers' free plan allows only 10ms CPU per invocation - including
+# Cron Triggers - which is far too little to parse and reshape 5,306 samples.
+# Doing it in CI keeps the site static, free, and instant for visitors.
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'   # every 30 minutes
+  workflow_dispatch:          # manual "refresh now"
+  push:
+    branches: [main]
+
+concurrency:
+  group: levsn-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - run: npm ci
+
+      - name: Pull latest data from Airtable
+        id: snapshot
+        env:
+          AIRTABLE_TOKEN: ${{ secrets.AIRTABLE_TOKEN }}
+          AIRTABLE_BASE_ID: ${{ secrets.AIRTABLE_BASE_ID }}
+        run: npm run snapshot
+
+      - name: Verify the snapshot against published figures
+        run: npm run verify
+
+      - name: Build
+        env:
+          NEXT_PUBLIC_MAPBOX_TOKEN: ${{ secrets.NEXT_PUBLIC_MAPBOX_TOKEN }}
+        run: npm run build
+
+      # Committing the snapshot gives the next run a baseline to diff against,
+      # and leaves an audit trail of when the data actually moved.
+      - name: Commit refreshed snapshot
+        if: steps.snapshot.outputs.changed == 'true'
+        run: |
+          git config user.name  "levsn-bot"
+          git config user.email "actions@github.com"
+          git add public/data/snapshot.json
+          git commit -m "data: refresh LEVSN snapshot"
+          git push
+
+      # Deploys on a schedule only when the data actually changed, and always on
+      # a push, so code changes ship immediately.
+      - name: Deploy to Cloudflare
+        if: steps.snapshot.outputs.changed == 'true' || github.event_name != 'schedule'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: app
+          command: deploy
+
+      - name: Report
+        run: |
+          echo "Data changed: ${{ steps.snapshot.outputs.changed }}"
+          echo "Event: ${{ github.event_name }}"

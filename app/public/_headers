@@ -1,0 +1,15 @@
+# Cloudflare serves these headers for the static site.
+
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  # Allows the dashboard to be embedded on the Cleveland Water Alliance site.
+  Content-Security-Policy: frame-ancestors 'self' https://clevelandwateralliance.org https://*.clevelandwateralliance.org https://*.webflow.io
+
+# The snapshot is revalidated on every load so refreshed data appears promptly.
+/data/snapshot.json
+  Cache-Control: public, max-age=0, must-revalidate
+
+# Hashed build assets never change.
+/_next/static/*
+  Cache-Control: public, max-age=31536000, immutable

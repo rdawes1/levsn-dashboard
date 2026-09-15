@@ -1,0 +1,11 @@
+node_modules/
+.next/
+out/
+.env*.local
+.DS_Store
+*.tsbuildinfo
+next-env.d.ts
+out/
+
+# Local Worker secrets for `wrangler dev`
+.dev.vars

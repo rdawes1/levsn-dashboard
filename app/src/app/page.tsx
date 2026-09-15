@@ -1,0 +1,262 @@
+'use client';
+
+import dynamic from 'next/dynamic';
+import { useEffect, useMemo, useRef } from 'react';
+import { ExportMenu } from '@/components/ExportMenu';
+import { FilterRail } from '@/components/FilterRail';
+import { KpiRail } from '@/components/KpiRail';
+import { STAT_HEADERS, statsToCsvRows } from '@/components/StatTable';
+import { BasinView } from '@/components/views/BasinView';
+import { ReferenceView } from '@/components/views/ReferenceView';
+import { ResultsView } from '@/components/views/ResultsView';
+import { StationView } from '@/components/views/StationView';
+import { fmtInt } from '@/lib/format';
+import { PARAMETER_BY_KEY, PARAMETERS } from '@/lib/parameters';
+import { filterSamples, groupStats, seriesFor, statsTable } from '@/lib/stats';
+import { useDashboard, VIEWS } from '@/store/useDashboard';
+
+// Leaflet touches `window` at import time, so the map is client-only.
+const MapView = dynamic(() => import('@/components/views/MapView').then((m) => m.MapView), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-full items-center justify-center text-[13px] text-cwa-slate">
+      Loading map&hellip;
+    </div>
+  ),
+});
+
+export default function DashboardPage() {
+  const {
+    snapshot,
+    loading,
+    error,
+    view,
+    filters,
+    focusParameter,
+    load,
+    setView,
+    setFocusParameter,
+    hydrateFromUrl,
+  } = useDashboard();
+
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    hydrateFromUrl();
+    void load();
+  }, [hydrateFromUrl, load]);
+
+  const samples = useMemo(
+    () => (snapshot ? filterSamples(snapshot.samples, filters) : []),
+    [snapshot, filters]
+  );
+
+  // KPI rail reflects the current filter state, not the whole base.
+  //
+  // "Sites Monitored" counts the station REGISTRY (not stations that happen to
+  // have samples) so that, unfiltered, it reports 225 - the same headline figure
+  // as the published dashboard. A year filter additionally narrows it to
+  // stations actually sampled in those years.
+  const kpis = useMemo(() => {
+    if (!snapshot) {
+      return { sites: 0, samples: 0, basins: 0, exceedancePct: null as number | null };
+    }
+
+    const sampledStationIds = new Set(samples.map((s) => s.stationId).filter(Boolean));
+
+    const registry = snapshot.stations.filter(
+      (st) =>
+        (!filters.basins.length || (st.basin && filters.basins.includes(st.basin))) &&
+        (!filters.stationIds.length ||
+          (st.stationId && filters.stationIds.includes(st.stationId))) &&
+        (!filters.organizations.length ||
+          (st.organization && filters.organizations.includes(st.organization))) &&
+        (!filters.tempRegimes.length ||
+          (st.tempRegime && filters.tempRegimes.includes(st.tempRegime))) &&
+        (!filters.ecoregions.length ||
+          (st.ecoregion && filters.ecoregions.includes(st.ecoregion))) &&
+        (!filters.streamSizes.length ||
+          (st.streamSize && filters.streamSizes.includes(st.streamSize))) &&
+        // Only stations sampled in the selected years count once a year is chosen.
+        (!filters.years.length || (st.stationId && sampledStationIds.has(st.stationId)))
+    );
+
+    const stationIds = new Set(registry.map((st) => st.stationId).filter(Boolean));
+    const basins = new Set(registry.map((st) => st.basin).filter(Boolean));
+
+    const active = filters.parameters.length
+      ? filters.parameters
+      : PARAMETERS.map((p) => p.key);
+
+    let evaluated = 0;
+    let exceeded = 0;
+    for (const s of samples) {
+      for (const k of active) {
+        const e = s.exceedances[k];
+        if (typeof e === 'number') {
+          evaluated += 1;
+          exceeded += e;
+        }
+      }
+    }
+
+    return {
+      sites: stationIds.size,
+      samples: samples.length,
+      basins: basins.size,
+      exceedancePct: evaluated ? (exceeded / evaluated) * 100 : null,
+    };
+  }, [snapshot, samples, filters]);
+
+  const viewLabel = VIEWS.find((v) => v.id === view)?.label ?? '';
+
+  const filenameStem = useMemo(() => {
+    const parts = ['levsn', view];
+    if (filters.years.length) parts.push(filters.years.join('-'));
+    if (filters.basins.length === 1) {
+      parts.push(filters.basins[0].trim().toLowerCase().replace(/[^a-z0-9]+/g, '-'));
+    }
+    return parts.join('-');
+  }, [view, filters.years, filters.basins]);
+
+  /** Builds CSV for whichever view is on screen, using canonical labels. */
+  function getCsv() {
+    if (!snapshot) return null;
+
+    if (view === 'basin' || view === 'station') {
+      const keyOf =
+        view === 'basin'
+          ? (s: (typeof samples)[number]) => s.basin
+          : (s: (typeof samples)[number]) => s.stationId;
+      const groupHeader = view === 'basin' ? 'Basin' : 'Station Id';
+      const groups = groupStats(samples, keyOf, filters.parameters);
+      return {
+        headers: [groupHeader, ...STAT_HEADERS],
+        rows: groups.flatMap((g) => statsToCsvRows(g.stats, [g.group])),
+      };
+    }
+
+    if (view === 'results') {
+      const param = PARAMETER_BY_KEY[focusParameter];
+      return {
+        headers: [
+          'Station Id',
+          'Station Name',
+          'Basin',
+          'Collection Date',
+          param.label,
+          'Exceedance',
+        ],
+        rows: seriesFor(samples, focusParameter).map((p) => [
+          p.stationId,
+          p.stationName,
+          p.basin,
+          p.date,
+          p.value,
+          p.exceeds ? 'Exceedance' : 'Non Exceedance',
+        ]),
+      };
+    }
+
+    // Locations and reference views export the overall stats table.
+    return {
+      headers: [...STAT_HEADERS],
+      rows: statsToCsvRows(statsTable(samples, filters.parameters)),
+    };
+  }
+
+  return (
+    <main className="flex h-screen flex-col overflow-hidden bg-cwa-deep">
+      <header className="flex shrink-0 items-baseline gap-3 px-6 pb-3 pt-5">
+        <h1 className="text-[19px] font-bold uppercase tracking-wide text-white">
+          Lake Erie Volunteer Science Network
+        </h1>
+        <span className="text-[13px] text-cwa-cyan">Water Quality Dashboard</span>
+      </header>
+
+      <div className="flex min-h-0 flex-1 gap-0 px-6 pb-2">
+        {/* Main panel */}
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-l-panel bg-white">
+          <div className="flex shrink-0 items-center justify-between gap-4 border-b border-cwa-mist px-5 py-3">
+            <div className="min-w-0">
+              <h2 className="truncate text-[16px] font-semibold text-cwa-deep">{viewLabel}</h2>
+              <p className="text-[12px] text-cwa-slate">
+                {fmtInt(kpis.samples)} samples &middot; {fmtInt(kpis.sites)} stations
+                {filters.basins.length === 1 ? ` · ${filters.basins[0].trim()}` : ''}
+              </p>
+            </div>
+            <ExportMenu targetRef={panelRef} filename={filenameStem} getCsv={getCsv} />
+          </div>
+
+          <div ref={panelRef} className="min-h-0 flex-1 overflow-hidden bg-white">
+            {loading && (
+              <div className="flex h-full items-center justify-center text-[13px] text-cwa-slate">
+                Loading LEVSN data from Airtable&hellip;
+              </div>
+            )}
+
+            {error && !loading && (
+              <div className="flex h-full flex-col items-center justify-center gap-3 px-8 text-center">
+                <p className="text-[14px] font-medium text-status-alert">
+                  Could not load LEVSN data
+                </p>
+                <p className="max-w-md text-[12px] text-cwa-slate">{error}</p>
+                <button
+                  onClick={() => void load()}
+                  className="rounded border border-cwa-silver px-3 py-1.5 text-[12px] text-cwa-deep hover:border-cwa-cyan"
+                >
+                  Try again
+                </button>
+              </div>
+            )}
+
+            {!loading && !error && snapshot && (
+              <>
+                {view === 'locations' && <MapView samples={samples} filters={filters} />}
+                {view === 'basin' && <BasinView samples={samples} filters={filters} />}
+                {view === 'station' && <StationView samples={samples} filters={filters} />}
+                {view === 'results' && (
+                  <ResultsView
+                    samples={samples}
+                    focusParameter={focusParameter}
+                    onFocusChange={setFocusParameter}
+                  />
+                )}
+                {view === 'reference' && <ReferenceView samples={samples} />}
+              </>
+            )}
+          </div>
+        </div>
+
+        <FilterRail />
+
+        <KpiRail
+          sitesMonitored={kpis.sites}
+          samplesCollected={kpis.samples}
+          basinsCovered={kpis.basins}
+          exceedancePct={kpis.exceedancePct}
+          fetchedAt={snapshot?.fetchedAt ?? null}
+          onRefresh={() => void load({ bust: true })}
+          refreshing={loading}
+        />
+      </div>
+
+      {/* View tabs, mirroring the sheet tabs in the existing dashboard */}
+      <nav className="flex shrink-0 gap-1 overflow-x-auto px-6 pb-4 pt-1 scroll-thin">
+        {VIEWS.map((v) => (
+          <button
+            key={v.id}
+            onClick={() => setView(v.id)}
+            className={`shrink-0 rounded-b border-t-2 px-3.5 py-2 text-[12px] transition-colors ${
+              v.id === view
+                ? 'border-cwa-cyan bg-white/10 font-medium text-white'
+                : 'border-transparent text-white/65 hover:bg-white/5 hover:text-white'
+            }`}
+          >
+            {v.label}
+          </button>
+        ))}
+      </nav>
+    </main>
+  );
+}

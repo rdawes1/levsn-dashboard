@@ -1,0 +1,86 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+
+  body {
+    @apply bg-cwa-deep font-sans text-cwa-ink antialiased;
+  }
+
+  /* Tabular figures keep stat columns aligned as values change. */
+  .tnum {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum' 1;
+  }
+}
+
+@layer components {
+  .panel {
+    @apply rounded-panel bg-white shadow-panel;
+  }
+
+  .stat-table {
+    @apply w-full border-collapse text-[13px];
+  }
+
+  .stat-table thead th {
+    @apply sticky top-0 z-10 border-b border-cwa-silver bg-white px-3 py-2.5
+           text-left text-[11px] font-semibold uppercase tracking-wider text-cwa-slate;
+  }
+
+  .stat-table tbody td {
+    @apply border-b border-cwa-mist px-3 py-2.5 align-middle;
+  }
+
+  .stat-table tbody tr:nth-child(even) {
+    @apply bg-[#FAFBFC];
+  }
+
+  .stat-table tbody tr:hover {
+    @apply bg-[#F0F7FC];
+  }
+
+  .num {
+    @apply tnum text-right;
+  }
+
+  .filter-check {
+    @apply flex w-full cursor-pointer items-center gap-2 rounded px-2 py-[5px]
+           text-[13px] leading-tight transition-colors hover:bg-white/10;
+  }
+
+  .scroll-thin {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.35) transparent;
+  }
+
+  .scroll-thin::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .scroll-thin::-webkit-scrollbar-thumb {
+    @apply rounded-full bg-white/30;
+  }
+
+  .scroll-light::-webkit-scrollbar-thumb {
+    @apply rounded-full bg-cwa-silver;
+  }
+}
+
+/* Mapbox controls restyled to brand. */
+.mapboxgl-ctrl-group button {
+  @apply !text-cwa-deep;
+}
+
+.mapboxgl-popup-content {
+  @apply !rounded-panel !px-3 !py-2.5 !shadow-panel;
+}
+
+.mapboxgl-popup-close-button {
+  @apply !px-1.5 !text-cwa-slate hover:!bg-transparent hover:!text-cwa-deep;
+}

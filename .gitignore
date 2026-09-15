@@ -1,0 +1,24 @@
+# The Airtable personal access token lives here in plain text.
+# It must never be committed - it grants read AND write access to the base.
+Token/
+
+.DS_Store
+node_modules/
+*.tsbuildinfo
+
+# Internal planning notes - contain a personal email address, and this repo is public.
+Project Planning/
+
+# Local tool state
+.claude/settings.local.json
+app/.wrangler/
+
+# Next.js
+app/.next/
+app/out/
+app/next-env.d.ts
+
+# Local env files (the Airtable token again)
+.env
+.env.local
+.env*.local
