@@ -18,6 +18,7 @@ import type { SeriesPoint } from '@/lib/stats';
  *   - stations compared: each station has its own colour AND marker shape, so
  *     stations stay distinguishable in greyscale and for colour-blind readers.
  *     Red is reserved for exceedance, drawn as a ring around the marker.
+ *     Readings are plotted as points only - no connecting trend lines.
  *
  * Points are drawn on canvas; an SVG layer carries axes, threshold lines and
  * the zoom box. (An SVG node per reading blocked the main thread for ~870ms.)
@@ -46,9 +47,6 @@ const OK = '#2E7D57';
 const ALERT = '#B3261E';
 const AXIS = '#3A4B64';
 const GRID = '#E9EAEB';
-
-/** A gap longer than this breaks a station's connecting line (e.g. over winter). */
-const LINE_BREAK_MS = 45 * 86_400_000;
 
 interface Props {
   panels: PanelSpec[];
@@ -288,24 +286,6 @@ function Panel({ spec, xDomain, showDates, stationIndex, yZoom, onZoom, onReset,
         const list = byStation.get(idx);
         if (list) list.push(p);
         else byStation.set(idx, [p]);
-      }
-
-      // Faint connecting line per station, broken across long gaps.
-      for (const [idx, pts] of byStation) {
-        const style = STATION_STYLES[idx];
-        ctx.strokeStyle = style.color;
-        ctx.globalAlpha = 0.35;
-        ctx.lineWidth = 1.25;
-        ctx.beginPath();
-        let prev: SeriesPoint | null = null;
-        for (const p of pts) {
-          const px = scales.xOf(p.timestamp);
-          const py = scales.yOf(p.value);
-          if (prev && p.timestamp - prev.timestamp <= LINE_BREAK_MS) ctx.lineTo(px, py);
-          else ctx.moveTo(px, py);
-          prev = p;
-        }
-        ctx.stroke();
       }
 
       for (const [idx, pts] of byStation) {
