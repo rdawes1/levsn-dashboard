@@ -6,9 +6,19 @@ name: Refresh LEVSN snapshot and deploy
 # Doing it in CI keeps the site static, free, and instant for visitors.
 
 on:
+  # Primary trigger: the dashboard's Worker dispatches this on a click
+  # (reason=manual) and every 30 minutes on Cloudflare's clock (reason=schedule).
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'manual = always redeploy; schedule = redeploy only if data changed'
+        required: false
+        default: manual
+        type: string
+  # Fallback only. GitHub throttles scheduled workflows on quiet repos - in
+  # practice these fired every 2-5 hours - so they cannot be the main timer.
   schedule:
-    - cron: '*/30 * * * *'   # every 30 minutes
-  workflow_dispatch:          # manual "refresh now"
+    - cron: '17 */2 * * *'
   push:
     branches: [main]
 
@@ -61,10 +71,13 @@ jobs:
           git commit -m "data: refresh LEVSN snapshot"
           git push
 
-      # Deploys on a schedule only when the data actually changed, and always on
-      # a push, so code changes ship immediately.
       - name: Deploy to Cloudflare
-        if: steps.snapshot.outputs.changed == 'true' || github.event_name != 'schedule'
+        # Redeploy when data changed, when code changed, or when a person asked.
+        # A timer-driven run with unchanged data leaves the site as it is.
+        if: >-
+          steps.snapshot.outputs.changed == 'true' ||
+          github.event_name == 'push' ||
+          (github.event_name == 'workflow_dispatch' && inputs.reason != 'schedule')
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}

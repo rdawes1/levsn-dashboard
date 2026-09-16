@@ -1,103 +1,112 @@
 /**
  * Cloudflare Worker fronting the static dashboard.
  *
- * Everything is served straight from static assets except one endpoint:
- * POST /api/refresh, which asks GitHub Actions to re-pull Airtable now rather
- * than waiting for the next scheduled run.
+ * Everything is served straight from static assets except:
  *
- * This stays comfortably inside the Workers free plan. The 10ms CPU limit
- * applies to time spent executing, not to time awaiting a network call, and
- * this handler does almost nothing but await one fetch to GitHub.
+ *   POST /api/refresh   Pull the latest data from Airtable now. Starts the
+ *                       GitHub Actions refresh job, which rebuilds the snapshot
+ *                       and redeploys; the page picks up the new data itself.
+ *   scheduled()         The same, every 30 minutes, on Cloudflare's clock.
+ *
+ * Why the pull isn't done here: a full Airtable read is ~58 requests (past the
+ * free plan's 50-subrequest limit per invocation) and reshaping 5,306 samples
+ * would blow the 10ms CPU limit. Starting the job is one or two small requests.
+ *
+ * The button is public, so a click never stacks jobs: if a refresh is already
+ * running, or finished within the cooldown, the click joins it instead.
  *
  * The GitHub token lives as a Worker secret and never reaches the browser.
  */
 
 interface Env {
-  /** Static assets binding - the built `out/` directory. */
   ASSETS: { fetch: (request: Request) => Promise<Response> };
-  /** Fine-grained PAT with Actions: read and write on the dashboard repo. */
+  /** Fine-grained PAT, this repo only, Actions: read and write. */
   GITHUB_TOKEN?: string;
-  /** "owner/repo", e.g. "rdawes1/levsn-dashboard". */
+  /** "owner/repo". */
   GITHUB_REPO?: string;
-  /** Workflow filename to dispatch. */
   GITHUB_WORKFLOW?: string;
-  /** Branch to run the workflow on. */
   GITHUB_REF?: string;
-  /** Shared key the dashboard must present. Without it, refresh is disabled. */
-  REFRESH_KEY?: string;
 }
 
-const JSON_HEADERS = { 'content-type': 'application/json; charset=utf-8' };
+/** A refresh that started this recently is joined rather than repeated. */
+const COOLDOWN_MS = 3 * 60 * 1000;
+
+type RefreshState = 'started' | 'running' | 'recent' | 'unavailable' | 'error';
+
+interface WorkflowRun {
+  status: string;
+  created_at: string;
+  run_started_at?: string;
+  html_url: string;
+}
 
 function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' },
+  });
 }
 
-/** Length-safe comparison so the key cannot be probed a character at a time. */
-function secretsMatch(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i += 1) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
+function githubHeaders(env: Env): Record<string, string> {
+  return {
+    authorization: `Bearer ${env.GITHUB_TOKEN}`,
+    accept: 'application/vnd.github+json',
+    'x-github-api-version': '2022-11-28',
+    // GitHub rejects API requests without a User-Agent.
+    'user-agent': 'levsn-dashboard-worker',
+  };
 }
 
-async function handleRefresh(request: Request, env: Env): Promise<Response> {
-  if (request.method !== 'POST') {
-    return json({ ok: false, error: 'Use POST to trigger a refresh.' }, 405);
+async function latestRun(env: Env): Promise<WorkflowRun | null> {
+  const workflow = env.GITHUB_WORKFLOW ?? 'refresh-and-deploy.yml';
+  const res = await fetch(
+    `https://api.github.com/repos/${env.GITHUB_REPO}/actions/workflows/${workflow}/runs?per_page=1`,
+    { headers: githubHeaders(env) }
+  );
+  if (!res.ok) throw new Error(`GitHub runs lookup returned ${res.status}`);
+  const body = (await res.json()) as { workflow_runs?: WorkflowRun[] };
+  return body.workflow_runs?.[0] ?? null;
+}
+
+/**
+ * Starts a refresh unless one is already underway or has just happened.
+ * `reason` tells the workflow whether to redeploy unconditionally (a person
+ * asked for fresh data) or only when the data actually changed (the timer).
+ */
+async function requestRefresh(
+  env: Env,
+  reason: 'manual' | 'schedule'
+): Promise<{ state: RefreshState; message: string }> {
+  if (!env.GITHUB_TOKEN || !env.GITHUB_REPO) {
+    return { state: 'unavailable', message: 'Live refresh is not configured yet.' };
   }
 
-  if (!env.GITHUB_TOKEN || !env.GITHUB_REPO || !env.REFRESH_KEY) {
-    return json(
-      {
-        ok: false,
-        error:
-          'Refresh is not configured. Set GITHUB_TOKEN, GITHUB_REPO and REFRESH_KEY as Worker secrets.',
-      },
-      503
-    );
-  }
-
-  const provided = request.headers.get('x-levsn-key') ?? '';
-  if (!secretsMatch(provided, env.REFRESH_KEY)) {
-    return json({ ok: false, error: 'Incorrect refresh key.' }, 401);
+  const last = await latestRun(env);
+  if (last) {
+    if (last.status === 'queued' || last.status === 'in_progress' || last.status === 'waiting') {
+      return { state: 'running', message: 'A refresh is already in progress.' };
+    }
+    const started = Date.parse(last.run_started_at ?? last.created_at);
+    if (Number.isFinite(started) && Date.now() - started < COOLDOWN_MS) {
+      return { state: 'recent', message: 'Data was refreshed moments ago.' };
+    }
   }
 
   const workflow = env.GITHUB_WORKFLOW ?? 'refresh-and-deploy.yml';
-  const ref = env.GITHUB_REF ?? 'main';
-
   const res = await fetch(
     `https://api.github.com/repos/${env.GITHUB_REPO}/actions/workflows/${workflow}/dispatches`,
     {
       method: 'POST',
-      headers: {
-        authorization: `Bearer ${env.GITHUB_TOKEN}`,
-        accept: 'application/vnd.github+json',
-        'x-github-api-version': '2022-11-28',
-        // GitHub rejects API requests without a User-Agent.
-        'user-agent': 'levsn-dashboard-worker',
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({ ref }),
+      headers: { ...githubHeaders(env), 'content-type': 'application/json' },
+      body: JSON.stringify({ ref: env.GITHUB_REF ?? 'main', inputs: { reason } }),
     }
   );
 
   if (res.status === 204) {
-    return json({
-      ok: true,
-      message:
-        'Refresh started. Airtable is being re-read and the site redeploys in a couple of minutes.',
-    });
+    return { state: 'started', message: 'Pulling the latest data from Airtable.' };
   }
-
   const detail = await res.text().catch(() => '');
-  return json(
-    {
-      ok: false,
-      error: `GitHub returned ${res.status}.`,
-      detail: detail.slice(0, 300),
-    },
-    502
-  );
+  return { state: 'error', message: `GitHub returned ${res.status}. ${detail.slice(0, 200)}` };
 }
 
 export default {
@@ -105,16 +114,30 @@ export default {
     const url = new URL(request.url);
 
     if (url.pathname === '/api/refresh') {
-      return handleRefresh(request, env);
-    }
-
-    // Lets the dashboard show or hide the admin control without exposing the key.
-    if (url.pathname === '/api/refresh-available') {
-      return json({
-        available: Boolean(env.GITHUB_TOKEN && env.GITHUB_REPO && env.REFRESH_KEY),
-      });
+      if (request.method !== 'POST') {
+        return json({ state: 'error', message: 'Use POST to request a refresh.' }, 405);
+      }
+      try {
+        const result = await requestRefresh(env, 'manual');
+        const status = result.state === 'error' ? 502 : result.state === 'unavailable' ? 503 : 200;
+        return json(result, status);
+      } catch (e) {
+        return json(
+          { state: 'error', message: e instanceof Error ? e.message : 'Refresh request failed.' },
+          502
+        );
+      }
     }
 
     return env.ASSETS.fetch(request);
+  },
+
+  /** Cloudflare Cron Trigger - see [triggers] in wrangler.toml. */
+  async scheduled(_event: unknown, env: Env, ctx: { waitUntil: (p: Promise<unknown>) => void }) {
+    ctx.waitUntil(
+      requestRefresh(env, 'schedule').catch((e) =>
+        console.error('scheduled refresh failed', e instanceof Error ? e.message : e)
+      )
+    );
   },
 };

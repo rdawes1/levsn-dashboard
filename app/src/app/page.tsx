@@ -171,8 +171,6 @@ export default function DashboardPage() {
           basinsCovered={kpis.basins}
           exceedancePct={kpis.exceedancePct}
           fetchedAt={snapshot?.fetchedAt ?? null}
-          onRefresh={() => void load({ bust: true })}
-          refreshing={loading}
         />
       </div>
 
@@ -260,8 +258,6 @@ export default function DashboardPage() {
           basinsCovered={kpis.basins}
           exceedancePct={kpis.exceedancePct}
           fetchedAt={snapshot?.fetchedAt ?? null}
-          onRefresh={() => void load({ bust: true })}
-          refreshing={loading}
         />
       </div>
 

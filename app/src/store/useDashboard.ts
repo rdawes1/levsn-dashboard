@@ -17,6 +17,24 @@ export const VIEWS: { id: ViewId; label: string; short: string }[] = [
   { id: 'reference', label: 'Conductivity Results to OH EPA Ref. Survey', short: 'OH EPA' },
 ];
 
+/**
+ * Lifecycle of a "Refresh data" click.
+ *   starting   - asking the Worker to start a refresh
+ *   refreshing - a refresh job is running; watching for the new snapshot
+ *   updated    - new data arrived and is on screen
+ *   pending    - still running after the wait window; it will land shortly
+ *   reloaded   - live refresh unavailable, so only re-read the published data
+ *   error      - the request itself failed
+ */
+export type RefreshPhase =
+  | 'idle'
+  | 'starting'
+  | 'refreshing'
+  | 'updated'
+  | 'pending'
+  | 'reloaded'
+  | 'error';
+
 interface DashboardState {
   snapshot: Snapshot | null;
   loading: boolean;
@@ -31,6 +49,7 @@ interface DashboardState {
    * the whole table rather than the first screenful.
    */
   exportMode: boolean;
+  refresh: { phase: RefreshPhase; message: string | null };
 
   load: (opts?: { bust?: boolean }) => Promise<void>;
   setView: (view: ViewId) => void;
@@ -40,6 +59,8 @@ interface DashboardState {
   resetFilters: () => void;
   hydrateFromUrl: () => void;
   setExportMode: (on: boolean) => void;
+  /** Pull the latest data from Airtable, then show it when it lands. */
+  refreshFromAirtable: () => Promise<void>;
 }
 
 /** First publicly visible parameter, used as the default chart selection. */
@@ -102,6 +123,7 @@ export const useDashboard = create<DashboardState>((set, get) => ({
   filters: { ...EMPTY_FILTERS },
   focusParameter: DEFAULT_FOCUS,
   exportMode: false,
+  refresh: { phase: 'idle', message: null },
 
   load: async (opts) => {
     set({ loading: true, error: null });
@@ -157,6 +179,93 @@ export const useDashboard = create<DashboardState>((set, get) => ({
   },
 
   setExportMode: (exportMode) => set({ exportMode }),
+
+  refreshFromAirtable: async () => {
+    const phase = get().refresh.phase;
+    if (phase === 'starting' || phase === 'refreshing') return;
+
+    set({ refresh: { phase: 'starting', message: 'Contacting Airtable\u2026' } });
+
+    let state: string;
+    try {
+      const res = await fetch('/api/refresh', { method: 'POST' });
+      // No Worker (e.g. local static preview) - treat as unavailable.
+      const body = res.headers.get('content-type')?.includes('json')
+        ? ((await res.json()) as { state?: string; message?: string })
+        : { state: 'unavailable' };
+      state = body.state ?? 'error';
+      if (state === 'error') {
+        set({ refresh: { phase: 'error', message: 'Could not start a refresh. Try again shortly.' } });
+        return;
+      }
+    } catch {
+      state = 'unavailable';
+    }
+
+    if (state === 'unavailable') {
+      await get().load({ bust: true });
+      set({
+        refresh: {
+          phase: 'reloaded',
+          message: 'Live refresh isn\u2019t set up yet \u2014 showing the latest published data.',
+        },
+      });
+      return;
+    }
+
+    if (state === 'recent') {
+      await get().load({ bust: true });
+      set({ refresh: { phase: 'updated', message: 'Already up to date.' } });
+      return;
+    }
+
+    // 'started' or 'running': watch for the redeployed snapshot.
+    set({
+      refresh: { phase: 'refreshing', message: 'Pulling the latest data from Airtable \u2014 usually 1\u20132 minutes.' },
+    });
+
+    const before = get().snapshot?.fetchedAt ?? null;
+    const url = DATA_URL;
+    const deadline = Date.now() + 5 * 60 * 1000;
+    let etag: string | null = null;
+
+    try {
+      const head = await fetch(url, { method: 'HEAD', cache: 'no-store' });
+      etag = head.headers.get('etag');
+    } catch {
+      /* fall back to comparing fetchedAt */
+    }
+
+    while (Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 10_000));
+
+      let changed = false;
+      try {
+        // A HEAD request is a few hundred bytes; only fetch the full snapshot
+        // once it has actually changed.
+        const head = await fetch(`${url}?t=${Date.now()}`, { method: 'HEAD', cache: 'no-store' });
+        const next = head.headers.get('etag');
+        changed = etag !== null && next !== null ? next !== etag : true;
+      } catch {
+        continue;
+      }
+      if (!changed) continue;
+
+      await get().load({ bust: true });
+      const after = get().snapshot?.fetchedAt ?? null;
+      if (after && after !== before) {
+        set({ refresh: { phase: 'updated', message: 'Updated with the latest Airtable data.' } });
+        return;
+      }
+    }
+
+    set({
+      refresh: {
+        phase: 'pending',
+        message: 'Still refreshing \u2014 the new data will appear on your next visit.',
+      },
+    });
+  },
 
   hydrateFromUrl: () => {
     if (typeof window === 'undefined') return;

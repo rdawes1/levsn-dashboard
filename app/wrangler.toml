@@ -1,9 +1,9 @@
 # Cloudflare Workers - free tier.
 #
 # The dashboard is a static site reading a prebuilt snapshot, so nothing runs
-# per request except one tiny endpoint (/api/refresh) that asks GitHub Actions
-# to re-pull Airtable on demand. Everything else is served straight from the
-# edge, which is what keeps this free and instant.
+# per request except /api/refresh, which asks GitHub Actions to re-pull
+# Airtable (from the Refresh button, and on the cron below).
+# Everything else is served straight from the edge, which is what keeps this free and instant.
 
 name = "levsn-dashboard"
 main = "worker/index.ts"
@@ -17,12 +17,15 @@ not_found_handling = "single-page-application"
 [observability]
 enabled = true
 
-# Secrets (set with `npx wrangler secret put <NAME>`, never committed):
-#   GITHUB_TOKEN  - fine-grained PAT, Actions: read and write, this repo only
-#   GITHUB_REPO   - "owner/repo"
-#   REFRESH_KEY   - shared passphrase the dashboard must present
-#
-# Optional plain vars:
+# Pull fresh Airtable data every 30 minutes. The Worker only starts the GitHub
+# refresh job, so this stays well inside the free plan's CPU limit.
+[triggers]
+crons = ["*/30 * * * *"]
+
+# One secret (set with `npx wrangler secret put GITHUB_TOKEN`, never committed):
+#   GITHUB_TOKEN - fine-grained PAT, this repo only, Actions: read and write
+# Without it, Refresh just re-reads the published data and the cron does nothing.
 [vars]
+GITHUB_REPO = "rdawes1/levsn-dashboard"
 GITHUB_WORKFLOW = "refresh-and-deploy.yml"
 GITHUB_REF = "main"
