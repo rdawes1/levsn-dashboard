@@ -43,6 +43,11 @@ interface DashboardState {
   filters: Filters;
   /** Parameters charted in the results view, stacked on a shared timeline (1-3). */
   focusParameters: ParameterKey[];
+  /**
+   * "Compare multiple" checkbox. Off: clicking a parameter charts only that
+   * parameter. On: parameters toggle, up to MAX_COMPARE at once.
+   */
+  multiParameter: boolean;
   /** Stations compared on the results chart (0-3). Empty = every filtered station. */
   compareStations: string[];
   /**
@@ -63,8 +68,9 @@ interface DashboardState {
   setView: (view: ViewId) => void;
   setFilter: <K extends keyof Filters>(key: K, value: Filters[K]) => void;
   toggleFilter: (key: keyof Filters, value: string | number) => void;
-  /** Adds or removes a charted parameter, keeping between 1 and MAX_COMPARE. */
-  toggleFocusParameter: (key: ParameterKey) => void;
+  /** Charts a parameter: replaces the selection, or toggles it when comparing multiple. */
+  pickFocusParameter: (key: ParameterKey) => void;
+  setMultiParameter: (on: boolean) => void;
   setCompareStations: (ids: string[]) => void;
   setChartDateRange: (range: [number, number] | null) => void;
   resetFilters: () => void;
@@ -116,13 +122,21 @@ interface UrlState {
   view: ViewId;
   filters: Filters;
   focusParameters: ParameterKey[];
+  multiParameter: boolean;
   compareStations: string[];
 }
 
-export function buildQuery({ view, filters, focusParameters, compareStations }: UrlState): string {
+export function buildQuery({
+  view,
+  filters,
+  focusParameters,
+  multiParameter,
+  compareStations,
+}: UrlState): string {
   const params = new URLSearchParams();
   params.set('view', view);
   params.set('focus', focusParameters.join('~'));
+  if (multiParameter) params.set('multi', '1');
   if (compareStations.length) params.set('cmp', compareStations.join('~'));
   for (const key of LIST_KEYS) {
     const value = filters[key] as (string | number)[];
@@ -143,6 +157,7 @@ export const useDashboard = create<DashboardState>((set, get) => ({
   view: 'locations',
   filters: { ...EMPTY_FILTERS },
   focusParameters: [DEFAULT_FOCUS],
+  multiParameter: false,
   compareStations: [],
   chartDateRange: null,
   exportMode: false,
@@ -189,10 +204,13 @@ export const useDashboard = create<DashboardState>((set, get) => ({
     pushUrl(get());
   },
 
-  toggleFocusParameter: (key) => {
+  pickFocusParameter: (key) => {
     const current = get().focusParameters;
     let next: ParameterKey[];
-    if (current.includes(key)) {
+
+    if (!get().multiParameter) {
+      next = [key];
+    } else if (current.includes(key)) {
       if (current.length === 1) return; // always chart at least one
       next = current.filter((k) => k !== key);
     } else {
@@ -200,7 +218,18 @@ export const useDashboard = create<DashboardState>((set, get) => ({
       // Keep registry order so panels don't reshuffle as parameters are added.
       next = VISIBLE_PARAMETER_KEYS.filter((k) => k === key || current.includes(k));
     }
+
     set({ focusParameters: next });
+    pushUrl(get());
+  },
+
+  setMultiParameter: (on) => {
+    // Leaving compare mode keeps the first charted parameter.
+    set(
+      on
+        ? { multiParameter: true }
+        : { multiParameter: false, focusParameters: get().focusParameters.slice(0, 1) }
+    );
     pushUrl(get());
   },
 
@@ -329,11 +358,15 @@ export const useDashboard = create<DashboardState>((set, get) => ({
       else (filters[key] as string[]) = parts;
     }
 
+    // A shared link with several parameters opens in compare mode.
+    const multi = params.get('multi') === '1' || focus.length > 1;
+
     set({
       filters,
+      multiParameter: multi,
       view: VIEWS.some((v) => v.id === view) ? (view as ViewId) : 'locations',
       focusParameters: focus.length
-        ? VISIBLE_PARAMETER_KEYS.filter((k) => focus.includes(k)).slice(0, MAX_COMPARE)
+        ? VISIBLE_PARAMETER_KEYS.filter((k) => focus.includes(k)).slice(0, multi ? MAX_COMPARE : 1)
         : [DEFAULT_FOCUS],
       compareStations: [...new Set(cmp)].slice(0, MAX_COMPARE),
     });

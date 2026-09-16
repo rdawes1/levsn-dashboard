@@ -11,7 +11,9 @@ import { MAX_COMPARE, useDashboard } from '@/store/useDashboard';
 
 export function ResultsView({ samples }: { samples: Sample[] }) {
   const focusParameters = useDashboard((s) => s.focusParameters);
-  const toggleFocusParameter = useDashboard((s) => s.toggleFocusParameter);
+  const pickFocusParameter = useDashboard((s) => s.pickFocusParameter);
+  const multiParameter = useDashboard((s) => s.multiParameter);
+  const setMultiParameter = useDashboard((s) => s.setMultiParameter);
   const compareStations = useDashboard((s) => s.compareStations);
   const setCompareStations = useDashboard((s) => s.setCompareStations);
   const dateRange = useDashboard((s) => s.chartDateRange);
@@ -72,7 +74,7 @@ export function ResultsView({ samples }: { samples: Sample[] }) {
   );
 
   const zoomed = dateRange !== null || Object.keys(yZoom).length > 0;
-  const atMax = focusParameters.length >= MAX_COMPARE;
+  const atMax = multiParameter && focusParameters.length >= MAX_COMPARE;
   const comparing = compareStations.length > 0;
 
   return (
@@ -80,7 +82,7 @@ export function ResultsView({ samples }: { samples: Sample[] }) {
       <div className="shrink-0 space-y-2 border-b border-cwa-mist px-3 py-2.5 sm:px-5">
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="mr-1 text-[11px] font-semibold uppercase tracking-wider text-cwa-slate">
-            Parameters
+            {multiParameter ? 'Parameters' : 'Parameter'}
           </span>
           {VISIBLE_PARAMETERS.map((p) => {
             const on = focusParameters.includes(p.key);
@@ -88,13 +90,13 @@ export function ResultsView({ samples }: { samples: Sample[] }) {
             return (
               <button
                 key={p.key}
-                onClick={() => toggleFocusParameter(p.key)}
+                onClick={() => pickFocusParameter(p.key)}
                 aria-pressed={on}
                 disabled={blocked}
                 title={
                   blocked
                     ? `Up to ${MAX_COMPARE} parameters - remove one to add ${p.label}`
-                    : on && focusParameters.length === 1
+                    : multiParameter && on && focusParameters.length === 1
                       ? 'At least one parameter is always shown'
                       : undefined
                 }
@@ -110,7 +112,20 @@ export function ResultsView({ samples }: { samples: Sample[] }) {
               </button>
             );
           })}
-          <span className="text-[11px] text-cwa-slate/80">up to {MAX_COMPARE}</span>
+          <label
+            className="ml-1 flex cursor-pointer select-none items-center gap-1.5 rounded-full border border-cwa-silver px-2.5 py-1 text-[12px] text-cwa-slate hover:border-cwa-cyan"
+            data-export-ignore="true"
+          >
+            <input
+              id="compare-multiple-parameters"
+              type="checkbox"
+              checked={multiParameter}
+              onChange={(e) => setMultiParameter(e.target.checked)}
+              className="h-3.5 w-3.5 accent-cwa-deep"
+            />
+            Compare multiple
+            {multiParameter && <span className="text-cwa-slate/70">(up to {MAX_COMPARE})</span>}
+          </label>
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-2">
