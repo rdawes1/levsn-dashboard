@@ -33,10 +33,8 @@ export default function DashboardPage() {
     error,
     view,
     filters,
-    focusParameter,
     load,
     setView,
-    setFocusParameter,
     hydrateFromUrl,
   } = useDashboard();
 
@@ -137,7 +135,8 @@ export default function DashboardPage() {
   /** Each tab exports the table it is showing, over the current filters. */
   function getCsv() {
     if (!snapshot) return null;
-    return buildCsv(view, samples, filters, focusParameter);
+    const { focusParameters, compareStations, chartDateRange } = useDashboard.getState();
+    return buildCsv(view, samples, filters, { focusParameters, compareStations, chartDateRange });
   }
 
   return (
@@ -238,11 +237,7 @@ export default function DashboardPage() {
                 {view === 'basin' && <BasinView samples={samples} filters={filters} />}
                 {view === 'station' && <StationView samples={samples} filters={filters} />}
                 {view === 'results' && (
-                  <ResultsView
-                    samples={samples}
-                    focusParameter={focusParameter}
-                    onFocusChange={setFocusParameter}
-                  />
+                  <ResultsView samples={samples} />
                 )}
                 {view === 'reference' && <ReferenceView samples={samples} />}
               </>

@@ -350,3 +350,28 @@ export function availableFacets(samples: Sample[], filters: Filters): Facets {
 
   return facets;
 }
+
+/**
+ * Chart series for several parameters, optionally limited to a set of
+ * compared stations and a date range. Every panel shares the same sample set,
+ * so the stacked charts always describe the same readings.
+ */
+export function comparisonSeries(
+  samples: Sample[],
+  keys: ParameterKey[],
+  stations: string[],
+  dateRange: [number, number] | null
+): Record<ParameterKey, SeriesPoint[]> {
+  const scoped = stations.length
+    ? samples.filter((s) => s.stationId !== null && stations.includes(s.stationId))
+    : samples;
+
+  const out = {} as Record<ParameterKey, SeriesPoint[]>;
+  for (const key of keys) {
+    const points = seriesFor(scoped, key);
+    out[key] = dateRange
+      ? points.filter((p) => p.timestamp >= dateRange[0] && p.timestamp <= dateRange[1])
+      : points;
+  }
+  return out;
+}

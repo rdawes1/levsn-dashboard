@@ -41,8 +41,16 @@ interface DashboardState {
   error: string | null;
   view: ViewId;
   filters: Filters;
-  /** Parameter charted in the results view (single-select, as in the original). */
-  focusParameter: ParameterKey;
+  /** Parameters charted in the results view, stacked on a shared timeline (1-3). */
+  focusParameters: ParameterKey[];
+  /** Stations compared on the results chart (0-3). Empty = every filtered station. */
+  compareStations: string[];
+  /**
+   * Date range the results chart is zoomed to, as epoch ms, or null for the
+   * full range. Shared by every stacked panel and by the CSV export. Not put in
+   * the URL: it is a momentary view, not a filter someone would share.
+   */
+  chartDateRange: [number, number] | null;
   /**
    * While true, grouped tables render every row rather than paging them in.
    * Used for printing and PNG capture, where "what you can see" has to mean
@@ -55,7 +63,10 @@ interface DashboardState {
   setView: (view: ViewId) => void;
   setFilter: <K extends keyof Filters>(key: K, value: Filters[K]) => void;
   toggleFilter: (key: keyof Filters, value: string | number) => void;
-  setFocusParameter: (key: ParameterKey) => void;
+  /** Adds or removes a charted parameter, keeping between 1 and MAX_COMPARE. */
+  toggleFocusParameter: (key: ParameterKey) => void;
+  setCompareStations: (ids: string[]) => void;
+  setChartDateRange: (range: [number, number] | null) => void;
   resetFilters: () => void;
   hydrateFromUrl: () => void;
   setExportMode: (on: boolean) => void;
@@ -65,6 +76,9 @@ interface DashboardState {
 
 /** First publicly visible parameter, used as the default chart selection. */
 const DEFAULT_FOCUS: ParameterKey = VISIBLE_PARAMETER_KEYS[0];
+
+/** Most parameters, and most stations, the results chart compares at once. */
+export const MAX_COMPARE = 3;
 
 /** Where the prebuilt snapshot lives. Overridable for a CDN or preview build. */
 const DATA_URL = process.env.NEXT_PUBLIC_DATA_URL ?? '/data/snapshot.json';
@@ -98,10 +112,18 @@ const SHORT: Record<string, string> = {
   streamSizes: 'ss',
 };
 
-export function buildQuery(view: ViewId, filters: Filters, focus: ParameterKey): string {
+interface UrlState {
+  view: ViewId;
+  filters: Filters;
+  focusParameters: ParameterKey[];
+  compareStations: string[];
+}
+
+export function buildQuery({ view, filters, focusParameters, compareStations }: UrlState): string {
   const params = new URLSearchParams();
   params.set('view', view);
-  params.set('focus', focus);
+  params.set('focus', focusParameters.join('~'));
+  if (compareStations.length) params.set('cmp', compareStations.join('~'));
   for (const key of LIST_KEYS) {
     const value = filters[key] as (string | number)[];
     if (value.length) params.set(SHORT[key], value.join('~'));
@@ -109,10 +131,9 @@ export function buildQuery(view: ViewId, filters: Filters, focus: ParameterKey):
   return params.toString();
 }
 
-function pushUrl(view: ViewId, filters: Filters, focus: ParameterKey) {
+function pushUrl(state: UrlState) {
   if (typeof window === 'undefined') return;
-  const qs = buildQuery(view, filters, focus);
-  window.history.replaceState(null, '', `${window.location.pathname}?${qs}`);
+  window.history.replaceState(null, '', `${window.location.pathname}?${buildQuery(state)}`);
 }
 
 export const useDashboard = create<DashboardState>((set, get) => ({
@@ -121,7 +142,9 @@ export const useDashboard = create<DashboardState>((set, get) => ({
   error: null,
   view: 'locations',
   filters: { ...EMPTY_FILTERS },
-  focusParameter: DEFAULT_FOCUS,
+  focusParameters: [DEFAULT_FOCUS],
+  compareStations: [],
+  chartDateRange: null,
   exportMode: false,
   refresh: { phase: 'idle', message: null },
 
@@ -147,14 +170,13 @@ export const useDashboard = create<DashboardState>((set, get) => ({
 
   setView: (view) => {
     set({ view });
-    const { filters, focusParameter } = get();
-    pushUrl(view, filters, focusParameter);
+    pushUrl(get());
   },
 
   setFilter: (key, value) => {
     const filters = { ...get().filters, [key]: value };
     set({ filters });
-    pushUrl(get().view, filters, get().focusParameter);
+    pushUrl(get());
   },
 
   toggleFilter: (key, value) => {
@@ -164,18 +186,35 @@ export const useDashboard = create<DashboardState>((set, get) => ({
       : [...current, value];
     const filters = { ...get().filters, [key]: next } as Filters;
     set({ filters });
-    pushUrl(get().view, filters, get().focusParameter);
+    pushUrl(get());
   },
 
-  setFocusParameter: (focusParameter) => {
-    set({ focusParameter });
-    pushUrl(get().view, get().filters, focusParameter);
+  toggleFocusParameter: (key) => {
+    const current = get().focusParameters;
+    let next: ParameterKey[];
+    if (current.includes(key)) {
+      if (current.length === 1) return; // always chart at least one
+      next = current.filter((k) => k !== key);
+    } else {
+      if (current.length >= MAX_COMPARE) return;
+      // Keep registry order so panels don't reshuffle as parameters are added.
+      next = VISIBLE_PARAMETER_KEYS.filter((k) => k === key || current.includes(k));
+    }
+    set({ focusParameters: next });
+    pushUrl(get());
+  },
+
+  setChartDateRange: (chartDateRange) => set({ chartDateRange }),
+
+  setCompareStations: (ids) => {
+    set({ compareStations: [...new Set(ids)].slice(0, MAX_COMPARE) });
+    pushUrl(get());
   },
 
   resetFilters: () => {
     const filters = { ...EMPTY_FILTERS };
     set({ filters });
-    pushUrl(get().view, filters, get().focusParameter);
+    pushUrl(get());
   },
 
   setExportMode: (exportMode) => set({ exportMode }),
@@ -272,7 +311,10 @@ export const useDashboard = create<DashboardState>((set, get) => ({
     const params = new URLSearchParams(window.location.search);
 
     const view = params.get('view') as ViewId | null;
-    const focus = params.get('focus') as ParameterKey | null;
+    const focus = (params.get('focus') ?? '')
+      .split('~')
+      .filter((k): k is ParameterKey => (VISIBLE_PARAMETER_KEYS as string[]).includes(k));
+    const cmp = (params.get('cmp') ?? '').split('~').filter(Boolean);
     const filters: Filters = { ...EMPTY_FILTERS };
 
     for (const key of LIST_KEYS) {
@@ -290,8 +332,10 @@ export const useDashboard = create<DashboardState>((set, get) => ({
     set({
       filters,
       view: VIEWS.some((v) => v.id === view) ? (view as ViewId) : 'locations',
-      focusParameter:
-        focus && (VISIBLE_PARAMETER_KEYS as string[]).includes(focus) ? focus : DEFAULT_FOCUS,
+      focusParameters: focus.length
+        ? VISIBLE_PARAMETER_KEYS.filter((k) => focus.includes(k)).slice(0, MAX_COMPARE)
+        : [DEFAULT_FOCUS],
+      compareStations: [...new Set(cmp)].slice(0, MAX_COMPARE),
     });
   },
 }));

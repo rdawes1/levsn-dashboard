@@ -27,12 +27,15 @@ interface Props<T extends string> {
   groups: GroupedStats<T>[];
   /** Extra detail rendered beside the group name, e.g. station name + basin. */
   renderMeta?: (group: T) => React.ReactNode;
+  /** Right-aligned header content, e.g. monitoring organisation logos. */
+  renderAside?: (group: T) => React.ReactNode;
   emptyMessage: string;
 }
 
 export function GroupedStatsList<T extends string>({
   groups,
   renderMeta,
+  renderAside,
   emptyMessage,
 }: Props<T>) {
   const [visible, setVisible] = useState(PAGE);
@@ -81,12 +84,17 @@ export function GroupedStatsList<T extends string>({
     >
       {shown.map(({ group, sampleRows, stats }) => (
         <section key={group} className="mb-6 last:mb-0">
-          <header className="sticky top-0 z-20 flex flex-wrap items-baseline gap-x-2 border-b border-cwa-silver bg-white px-5 py-2.5">
+          <header className="sticky top-0 z-20 flex flex-wrap items-center gap-x-2 gap-y-1.5 border-b border-cwa-silver bg-white px-3 py-2 sm:px-5 sm:py-2.5">
             <h3 className="text-[15px] font-semibold text-cwa-deep">{group}</h3>
             {renderMeta?.(group)}
             <span className="text-[12px] text-cwa-slate">
               {fmtInt(sampleRows)} sample{sampleRows === 1 ? '' : 's'}
             </span>
+            {renderAside && (
+              <div className="ml-auto flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
+                {renderAside(group)}
+              </div>
+            )}
           </header>
 
           <div className="overflow-x-auto">

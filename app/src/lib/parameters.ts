@@ -48,6 +48,14 @@ export interface ParameterDef {
    * nothing else needs to change.
    */
   publicVisible: boolean;
+  /**
+   * Reference lines drawn on the chart. These mirror the exceedance rules in
+   * `threshold`, which are applied in Airtable; they are for orientation only
+   * and play no part in deciding whether a reading exceeds.
+   */
+  thresholdLines?: { value: number; label: string }[];
+  /** Whether the value axis should start at zero. False for pH, which sits in a narrow band. */
+  zeroBaseline: boolean;
 }
 
 export const PARAMETERS: ParameterDef[] = [
@@ -60,6 +68,8 @@ export const PARAMETERS: ParameterDef[] = [
     unit: 'mg/L',
     threshold: 'Exceedance when Chloride > 150 mg/L',
     precision: 2,
+    thresholdLines: [{ value: 150, label: '150 limit' }],
+    zeroBaseline: true,
     publicVisible: false,
   },
   {
@@ -71,6 +81,8 @@ export const PARAMETERS: ParameterDef[] = [
     unit: 'µS/cm',
     threshold: 'Exceedance when Conductivity ≥ 1,500 µS/cm',
     precision: 2,
+    thresholdLines: [{ value: 1500, label: '1,500 limit' }],
+    zeroBaseline: true,
     publicVisible: true,
   },
   {
@@ -82,6 +94,8 @@ export const PARAMETERS: ParameterDef[] = [
     unit: 'µS/cm',
     threshold: 'Exceedance when Conductivity ≥ 412 µS/cm (biological condition benchmark)',
     precision: 2,
+    thresholdLines: [{ value: 412, label: '412 benchmark' }],
+    zeroBaseline: true,
     publicVisible: true,
   },
   {
@@ -93,6 +107,8 @@ export const PARAMETERS: ParameterDef[] = [
     unit: 'mg/L',
     threshold: 'Exceedance when TDS > 1,500 mg/L',
     precision: 2,
+    thresholdLines: [{ value: 1500, label: '1,500 limit' }],
+    zeroBaseline: true,
     publicVisible: true,
   },
   {
@@ -104,6 +120,11 @@ export const PARAMETERS: ParameterDef[] = [
     unit: 'mg/L',
     threshold: 'Exceedance when DO ≤ 5 mg/L (Warm) or ≤ 7 mg/L (Cold)',
     precision: 2,
+    thresholdLines: [
+      { value: 5, label: '5 Warm' },
+      { value: 7, label: '7 Cold' },
+    ],
+    zeroBaseline: true,
     publicVisible: true,
   },
   {
@@ -115,6 +136,11 @@ export const PARAMETERS: ParameterDef[] = [
     unit: 'su',
     threshold: 'Exceedance when pH < 6.5 or pH > 9',
     precision: 2,
+    thresholdLines: [
+      { value: 6.5, label: '6.5' },
+      { value: 9, label: '9' },
+    ],
+    zeroBaseline: false,
     publicVisible: true,
   },
   {
@@ -126,6 +152,8 @@ export const PARAMETERS: ParameterDef[] = [
     unit: 'mg/L',
     threshold: 'Exceedance when Salinity ≥ 1,000 mg/L',
     precision: 2,
+    thresholdLines: [{ value: 1000, label: '1,000 limit' }],
+    zeroBaseline: true,
     publicVisible: true,
   },
   {
@@ -137,6 +165,8 @@ export const PARAMETERS: ParameterDef[] = [
     unit: 'mg/L',
     threshold: 'Exceedance when TDS > 200 mg/L',
     precision: 2,
+    thresholdLines: [{ value: 200, label: '200 limit' }],
+    zeroBaseline: true,
     publicVisible: false,
   },
   {
@@ -148,6 +178,7 @@ export const PARAMETERS: ParameterDef[] = [
     unit: '°C',
     threshold: 'Exceedance when temperature exceeds the month + temperature-regime threshold',
     precision: 2,
+    zeroBaseline: true,
     publicVisible: true,
   },
 ];

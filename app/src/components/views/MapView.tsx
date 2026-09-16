@@ -10,6 +10,7 @@ import Map, {
   Source,
   type MapLayerMouseEvent,
 } from 'react-map-gl';
+import { OrgLogo } from '@/components/OrgLogo';
 import { fmtInt, fmtPct } from '@/lib/format';
 import { stationRollups, type Filters } from '@/lib/stats';
 import type { Sample } from '@/lib/types';
@@ -191,7 +192,8 @@ export function MapView({ samples, filters }: { samples: Sample[]; filters: Filt
           <Popup
             longitude={selected.lon}
             latitude={selected.lat}
-            anchor="bottom"
+            /* No fixed anchor: Mapbox opens the popup on whichever side keeps it
+               in view, so stations near the top edge don't clip the logo. */
             offset={14}
             closeButton
             closeOnClick={false}
@@ -199,6 +201,11 @@ export function MapView({ samples, filters }: { samples: Sample[]; filters: Filt
             maxWidth="260px"
           >
             <div className="min-w-[190px] font-sans text-[12px] leading-relaxed">
+              {selected.organization && (
+                <div className="mb-2 flex min-h-[34px] items-center border-b border-cwa-mist pb-2 pr-4">
+                  <OrgLogo org={selected.organization} size="md" />
+                </div>
+              )}
               <p className="text-[13px] font-semibold text-cwa-deep">{selected.stationId}</p>
               {selected.stationName && <p className="text-cwa-ink">{selected.stationName}</p>}
               <dl className="mt-1.5 space-y-0.5 text-cwa-slate">

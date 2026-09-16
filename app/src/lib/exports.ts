@@ -2,7 +2,7 @@ import { PARAMETER_BY_KEY, type ParameterKey } from './parameters';
 import {
   conductivityPercentiles,
   groupStats,
-  seriesFor,
+  comparisonSeries,
   stationRollups,
   statsTable,
   type Filters,
@@ -58,11 +58,18 @@ function statRow(s: ParameterStats, prefix: unknown[]): unknown[] {
   ];
 }
 
+export interface ChartState {
+  focusParameters: ParameterKey[];
+  compareStations: string[];
+  /** Zoomed date range on the results chart, epoch ms. */
+  chartDateRange: [number, number] | null;
+}
+
 export function buildCsv(
   view: ViewId,
   samples: Sample[],
   filters: Filters,
-  focusParameter: ParameterKey
+  chart: ChartState
 ): CsvPayload {
   switch (view) {
     /* Map: one row per monitoring station, matching the markers on screen. */
@@ -125,9 +132,34 @@ export function buildCsv(
       };
     }
 
-    /* Results: the individual readings plotted, at source precision. */
+    /*
+     * Results: exactly the readings the chart shows - the charted parameters,
+     * the compared stations if any, and the zoomed date range if zoomed.
+     * One row per reading, so several parameters share a column layout.
+     */
     case 'results': {
-      const param = PARAMETER_BY_KEY[focusParameter];
+      const series = comparisonSeries(
+        samples,
+        chart.focusParameters,
+        chart.compareStations,
+        chart.chartDateRange
+      );
+      const rows = chart.focusParameters.flatMap((key) => {
+        const param = PARAMETER_BY_KEY[key];
+        return series[key].map((p) => [
+          p.stationId,
+          p.stationName,
+          p.basin,
+          p.date,
+          param.label,
+          p.value,
+          param.unit,
+          p.exceeds ? 'Exceedance' : 'Non Exceedance',
+        ]);
+      });
+      rows.sort((a, b) =>
+        String(a[3]).localeCompare(String(b[3])) || String(a[0]).localeCompare(String(b[0]))
+      );
       return {
         headers: [
           'Station Id',
@@ -135,18 +167,11 @@ export function buildCsv(
           'Basin',
           'Collection Date',
           'Parameter',
-          `Reading (${param.unit})`,
+          'Reading',
+          'Unit',
           'Exceedance',
         ],
-        rows: seriesFor(samples, focusParameter).map((p) => [
-          p.stationId,
-          p.stationName,
-          p.basin,
-          p.date,
-          param.label,
-          p.value,
-          p.exceeds ? 'Exceedance' : 'Non Exceedance',
-        ]),
+        rows,
       };
     }
 
