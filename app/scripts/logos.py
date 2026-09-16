@@ -27,10 +27,15 @@ MANIFEST = ROOT / "app" / "src" / "lib" / "logos.generated.json"
 LOGOS = {
     "Ashland Soil & Water Conservation District": ("ashlandSoilandWaterlogo.jpg", "ashland-swcd"),
     "Buffalo Niagara Waterkeeper": ("buffaloniagralogo.webp", "buffalo-niagara-waterkeeper"),
-    "City of Cuyahoga Falls": ("cityofcuyahogafalls.png", "city-of-cuyahoga-falls"),
+    # Seal without the mayor's name, so it doesn't date at the next election.
+    "City of Cuyahoga Falls": ("ghows-OH-42699401-3714-425d-bdab-abe5416475c5-59483012.webp", "city-of-cuyahoga-falls"),
+    "Cleveland Metroparks": ("clevemetroparks.webp", "cleveland-metroparks"),
     "Clinton River Watershed Council": ("Clinton River Watershed CouncilLogo.jpeg", "clinton-river-watershed-council"),
     "Defiance Soil & Water Conservation District": ("defianceSoilandWaterConservationDistrict.png", "defiance-swcd"),
+    # Toledo stations are monitored under the Partners for Clean Streams brand.
+    "Community Water Action Toledo": ("PartnersForCleanStreamsUpdated.png", "partners-for-clean-streams"),
     "Doan Brook Watershed Partnership": ("DoanBrooklogo.webp", "doan-brook-watershed-partnership"),
+    "Fredonia State University of New York": ("fredonia-logo-stacked-2c-web-2000px.png", "fredonia-state-university"),
     "Erie Soil and Water Conservation District": ("Erie Soil & Water Conservation District.webp", "erie-swcd"),
     "Huron River Watershed Council": ("huron.webp", "huron-river-watershed-council"),
     "River Raisin": ("riverraisin.png", "river-raisin-watershed-council"),
@@ -38,9 +43,6 @@ LOGOS = {
     "Tinkers Creek Watershed Partners": ("tinkerscreeklogo.webp", "tinkers-creek-watershed-partners"),
     "University of Windsor": ("University of Windsor Logo.webp", "university-of-windsor"),
     "Water Rangers": ("Water-Rangers-Logo.webp", "water-rangers"),
-    # Deliberately absent - see the dashboard notes:
-    #   Community Water Action Toledo: supplied file is the Partners for Clean Streams logo
-    #   Cleveland Metroparks, Fredonia State University of New York: no logo supplied
 }
 
 TARGET_AREA = 150 * 72      # px^2 at 2x - sets the shared visual weight

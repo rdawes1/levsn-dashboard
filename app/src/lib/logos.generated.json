@@ -10,14 +10,24 @@
     "width": 146
   },
   "City of Cuyahoga Falls": {
-    "height": 104,
+    "height": 98,
     "src": "/logos/city-of-cuyahoga-falls.webp",
-    "width": 102
+    "width": 128
+  },
+  "Cleveland Metroparks": {
+    "height": 104,
+    "src": "/logos/cleveland-metroparks.webp",
+    "width": 107
   },
   "Clinton River Watershed Council": {
     "height": 104,
     "src": "/logos/clinton-river-watershed-council.webp",
     "width": 80
+  },
+  "Community Water Action Toledo": {
+    "height": 94,
+    "src": "/logos/partners-for-clean-streams.webp",
+    "width": 134
   },
   "Defiance Soil & Water Conservation District": {
     "height": 61,
@@ -33,6 +43,11 @@
     "height": 87,
     "src": "/logos/erie-swcd.webp",
     "width": 144
+  },
+  "Fredonia State University of New York": {
+    "height": 79,
+    "src": "/logos/fredonia-state-university.webp",
+    "width": 160
   },
   "Huron River Watershed Council": {
     "height": 79,
