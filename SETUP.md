@@ -68,35 +68,40 @@ gh run watch --repo rdawes1/levsn-dashboard
 From here the site refreshes every 30 minutes and redeploys only when the
 Airtable data actually changed.
 
-## 3. The "Refresh from Airtable" button
+## 3. Turn on the Refresh button and the 30-minute refresh
 
-The dashboard can trigger a refresh on demand instead of waiting for the
-schedule. It's deliberately not visible to the public: it appears only at
-`?admin=1`, and the key is checked by the Worker, not the browser.
+The dashboard's **Refresh data** button pulls the latest data from Airtable:
+the Worker starts the GitHub refresh job, and the page updates itself when the
+new data lands, usually within 1–2 minutes. The same Worker also starts a
+refresh every 30 minutes on a Cloudflare timer.
 
-**Make a GitHub token for it.** Go to
+The button is public but can't be abused: if a refresh is already running, or
+finished in the last three minutes, a click joins that one instead of starting
+another.
+
+Until the token below is set, the button only re-reads the data already
+published and says so, and the 30-minute timer does nothing. GitHub's own
+schedule still refreshes every ~2 hours as a fallback.
+
+**Make a GitHub token.** Go to
 https://github.com/settings/personal-access-tokens/new
 
 - Repository access: **Only select repositories** → `rdawes1/levsn-dashboard`
 - Permissions → Repository → **Actions: Read and write**
 - Generate, and copy the token.
 
-**Give it to the Worker**, along with a passphrase of your choosing:
+**Give it to the Worker** (it prompts you to paste, so the token never lands in
+a file or a chat):
 
 ```bash
-cd app
-npx wrangler secret put GITHUB_TOKEN   # paste the GitHub token
-npx wrangler secret put GITHUB_REPO    # rdawes1/levsn-dashboard
-npx wrangler secret put REFRESH_KEY    # any passphrase you'll remember
-npx wrangler deploy
+cd "/Users/robertdawes/Desktop/Lake Erie Volunteer Science Network/app"
+npx wrangler secret put GITHUB_TOKEN
 ```
 
-Now open `https://your-url/?admin=1`. A **Refresh from Airtable** button appears
-under the data timestamp. The first click asks for the passphrase and remembers
-it in that browser.
+That's the only secret. It takes effect immediately; no redeploy needed.
 
-There's also always the plain GitHub route, which needs no setup at all: the
-repo's **Actions** tab → *Refresh LEVSN snapshot and deploy* → **Run workflow**.
+There's also always the plain GitHub route, which needs no setup: the repo's
+**Actions** tab → *Refresh LEVSN snapshot and deploy* → **Run workflow**.
 
 ## 4. Two things worth doing once it's public
 
