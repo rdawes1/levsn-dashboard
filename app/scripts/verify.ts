@@ -17,7 +17,12 @@ const REMOTE = urlArg > -1 ? process.argv[urlArg + 1] : null;
 const LOCAL_SNAPSHOT = 'public/data/snapshot.json';
 
 /** Hidden from the public dashboard per LEVSN programme guidance. */
-const HIDDEN_LABELS = ['Chloride', 'Total Dissolved Solids'];
+const HIDDEN_LABELS = [
+  'Chloride',
+  'Total Dissolved Solids',
+  'Conductivity Biocondition',
+  'Conductivity TDS',
+];
 
 /** Sourced from the published dashboard: Basin = Big Sister Creek, Year = 2025. */
 const EXPECTED_BIG_SISTER_2025: Record<string, [number, number, number, number]> = {
@@ -42,11 +47,11 @@ const MINIMUM_TOTALS = { samples: 5306, stationRecords: 225 };
 
 /** Exceedance counts cross-checked against Airtable's own Basins rollups. */
 const EXPECTED_EXCEEDANCES: { basin: string; year: number; label: string; count: number }[] = [
-  { basin: 'Buffalo', year: 2025, label: 'Conductivity Biocondition', count: 21 },
+
   { basin: 'Buffalo', year: 2025, label: 'Salinity', count: 1 },
   { basin: 'Buffalo', year: 2025, label: 'Water Temperature', count: 0 },
   { basin: 'Buffalo', year: 2025, label: 'Dissolved Oxygen', count: 0 },
-  { basin: 'Big Sister Creek', year: 2025, label: 'Conductivity Biocondition', count: 7 },
+
   { basin: 'Big Sister Creek', year: 2025, label: 'Salinity', count: 0 },
   { basin: 'Big Sister Creek', year: 2025, label: 'Water Temperature', count: 6 },
   { basin: 'Big Sister Creek', year: 2025, label: 'pH', count: 0 },
@@ -119,8 +124,8 @@ async function main() {
     `got ${VISIBLE_PARAMETERS.length}`
   );
   check(
-    'Conductivity TDS remains visible',
-    VISIBLE_PARAMETERS.some((p) => p.label === 'Conductivity TDS'),
+    'Conductivity remains visible',
+    VISIBLE_PARAMETERS.some((p) => p.label === 'Conductivity'),
     'missing'
   );
 

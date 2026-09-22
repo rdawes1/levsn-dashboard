@@ -41,8 +41,9 @@ export interface ParameterDef {
   /**
    * Whether this parameter is shown in the public dashboard.
    *
-   * Chloride and Total Dissolved Solids are computed and kept in the data, but
-   * excluded from public view per LEVSN programme guidance - Chloride is to be
+   * Chloride, Total Dissolved Solids, Conductivity Biocondition and
+   * Conductivity TDS are computed and kept in the data, but excluded from
+   * public view per LEVSN programme guidance - Chloride is to be
    * entered directly by volunteers rather than derived, and Conductivity TDS is
    * the TDS measure the programme reports. Flip these to true to restore them;
    * nothing else needs to change.
@@ -96,7 +97,10 @@ export const PARAMETERS: ParameterDef[] = [
     precision: 2,
     thresholdLines: [{ value: 412, label: '412 benchmark' }],
     zeroBaseline: true,
-    publicVisible: true,
+    // Hidden from the dashboard on request (22 Sep 2026). The parameter is
+    // still computed and exported in the data; flip this back to true to
+    // restore Conductivity Biocondition to the tables, map, chart, filters and scoring.
+    publicVisible: false,
   },
   {
     key: 'conductivityTds',
@@ -109,7 +113,10 @@ export const PARAMETERS: ParameterDef[] = [
     precision: 2,
     thresholdLines: [{ value: 1500, label: '1,500 limit' }],
     zeroBaseline: true,
-    publicVisible: true,
+    // Hidden from the dashboard on request (22 Sep 2026). The parameter is
+    // still computed and exported in the data; flip this back to true to
+    // restore Conductivity TDS to the tables, map, chart, filters and scoring.
+    publicVisible: false,
   },
   {
     key: 'dissolvedOxygen',
