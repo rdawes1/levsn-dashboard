@@ -6,7 +6,7 @@
  *   npm run verify -- --url https://levsn.example.org
  */
 import { readFile } from 'node:fs/promises';
-import { PARAMETERS, VISIBLE_PARAMETERS } from '../src/lib/parameters';
+import { PARAMETER_BY_KEY, PARAMETERS, VISIBLE_PARAMETERS } from '../src/lib/parameters';
 import { filterSamples, groupStats, EMPTY_FILTERS } from '../src/lib/stats';
 import type { Snapshot } from '../src/lib/types';
 import { decodeSnapshot, type WireSnapshot } from '../src/lib/wire';
@@ -17,12 +17,16 @@ const REMOTE = urlArg > -1 ? process.argv[urlArg + 1] : null;
 const LOCAL_SNAPSHOT = 'public/data/snapshot.json';
 
 /** Hidden from the public dashboard per LEVSN programme guidance. */
-const HIDDEN_LABELS = [
-  'Chloride',
-  'Total Dissolved Solids',
-  'Conductivity Biocondition',
-  'Conductivity TDS',
-];
+const HIDDEN_LABELS = ['Chloride', 'Total Dissolved Solids', 'Conductivity TDS'];
+
+/**
+ * Shown deliberately, and asserted so a future change cannot drop one by
+ * accident. Conductivity carries the 1,500 uS/cm water quality standard and
+ * Conductivity Biocondition the 412 uS/cm biological condition benchmark; the
+ * partner organisations report against 412, so both must stay on the
+ * dashboard (restored 9 Nov 2026 after Summit SWCD flagged the discrepancy).
+ */
+const VISIBLE_LABELS = ['Conductivity', 'Conductivity Biocondition'];
 
 /** Sourced from the published dashboard: Basin = Big Sister Creek, Year = 2025. */
 const EXPECTED_BIG_SISTER_2025: Record<string, [number, number, number, number]> = {
@@ -123,10 +127,19 @@ async function main() {
     VISIBLE_PARAMETERS.length === expectedLabels.length - HIDDEN_LABELS.length,
     `got ${VISIBLE_PARAMETERS.length}`
   );
+  for (const label of VISIBLE_LABELS) {
+    check(
+      `${label} remains visible`,
+      VISIBLE_PARAMETERS.some((p) => p.label === label),
+      'missing'
+    );
+  }
   check(
-    'Conductivity remains visible',
-    VISIBLE_PARAMETERS.some((p) => p.label === 'Conductivity'),
-    'missing'
+    'the two conductivity measures carry different thresholds',
+    PARAMETER_BY_KEY.conductivity.threshold !== PARAMETER_BY_KEY.conductivityBiocondition.threshold &&
+      PARAMETER_BY_KEY.conductivity.threshold.includes('1,500') &&
+      PARAMETER_BY_KEY.conductivityBiocondition.threshold.includes('412'),
+    'the thresholds shown to users no longer distinguish 1,500 from 412'
   );
 
   console.log('\nBig Sister Creek / 2025 summary statistics');

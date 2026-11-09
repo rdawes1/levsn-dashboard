@@ -97,10 +97,12 @@ export const PARAMETERS: ParameterDef[] = [
     precision: 2,
     thresholdLines: [{ value: 412, label: '412 benchmark' }],
     zeroBaseline: true,
-    // Hidden from the dashboard on request (22 Sep 2026). The parameter is
-    // still computed and exported in the data; flip this back to true to
-    // restore Conductivity Biocondition to the tables, map, chart, filters and scoring.
-    publicVisible: false,
+    // Hidden on 22 Sep 2026, restored 9 Nov 2026: the partner organisations
+    // report against the 412 biological condition benchmark rather than the
+    // 1,500 water quality standard, so both are shown and the threshold text
+    // tells them apart. Note that roughly 94% of all samples exceed 412, so
+    // this parameter reads as near-universal exceedance by design.
+    publicVisible: true,
   },
   {
     key: 'conductivityTds',
