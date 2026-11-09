@@ -192,6 +192,30 @@ async function main() {
     );
   }
 
+  // PB001 is monitored by two groups from 2026. Attribution comes from each
+  // reading's own `Sample Organization`, so if that field or the fallback
+  // order in airtable.ts is disturbed, every reading silently reverts to the
+  // station owner and one group loses credit for its work.
+  console.log('\nShared sites (per-reading organization)');
+  const pb001 = snap.samples.filter((s) => s.stationId === 'PB001' && s.year === 2026);
+  const byOrg = new Map<string, number>();
+  for (const s of pb001) byOrg.set(s.organization ?? '(none)', (byOrg.get(s.organization ?? '(none)') ?? 0) + 1);
+  check(
+    'PB001 2026 is split between two organizations',
+    byOrg.size === 2,
+    `got ${byOrg.size}: ${[...byOrg].map(([o, n]) => `${o}=${n}`).join(', ')}`
+  );
+  check(
+    'PB001 2026 Summit SWCD = 19 readings',
+    byOrg.get('Summit Soil and Water Conservation District') === 19,
+    `got ${byOrg.get('Summit Soil and Water Conservation District') ?? 0}`
+  );
+  check(
+    'PB001 2026 Tinkers Creek = 7 readings',
+    byOrg.get('Tinkers Creek Watershed Partners') === 7,
+    `got ${byOrg.get('Tinkers Creek Watershed Partners') ?? 0}`
+  );
+
   console.log(
     failures === 0
       ? '\nAll checks passed.\n'

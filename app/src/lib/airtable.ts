@@ -134,8 +134,17 @@ export async function loadSnapshot(): Promise<Snapshot> {
       stationId: station?.stationId ?? null,
       stationName: station?.stationName ?? str(f['Station Name (from station_id) (from station_id)']),
       basin: resolveBasin(f['Basin-Sample']) ?? resolveBasin(f['Basin']) ?? station?.basin ?? null,
+      // `Sample Organization` names who collected THIS reading, and wins when
+      // set. A station record can only name one owner, so without it a site
+      // monitored by two groups credits all of its readings to one of them.
+      // It is blank on almost every row; the station owner is the normal case.
+      // Shared sites so far: PB001, by Summit SWCD and Tinkers Creek
+      // Watershed Partners from 2026.
       organization:
-        str(f['Organization (from station_id) (from station_id)']) ?? station?.organization ?? null,
+        str(f['Sample Organization']) ??
+        str(f['Organization (from station_id) (from station_id)']) ??
+        station?.organization ??
+        null,
       ecoregion:
         str(f['Ecoregion (from station_id) 2 (from station_id)']) ?? station?.ecoregion ?? null,
       streamSize:
@@ -160,7 +169,14 @@ export async function loadSnapshot(): Promise<Snapshot> {
     samples,
     stations,
     basins: uniqueSorted([...basinName.values()]),
-    organizations: uniqueSorted(stations.map((s) => s.organization)),
+    // Stations AND samples: a reading can name its own organization (see
+    // `Sample Organization` above), so a group that collects at a shared site
+    // without owning any station of its own would otherwise be missing from
+    // the filter list and unselectable.
+    organizations: uniqueSorted([
+      ...stations.map((s) => s.organization),
+      ...samples.map((s) => s.organization),
+    ]),
     years,
     ecoregions: uniqueSorted(stations.map((s) => s.ecoregion)),
     streamSizes: uniqueSorted(stations.map((s) => s.streamSize)),
@@ -172,7 +188,10 @@ export async function loadSnapshot(): Promise<Snapshot> {
       // Basins with at least one station - i.e. basins the dashboard can
       // actually show data for, not every row in the Basins table.
       basins: new Set(stations.map((s) => s.basin).filter(Boolean)).size,
-      organizations: uniqueSorted(stations.map((s) => s.organization)).length,
+      organizations: uniqueSorted([
+        ...stations.map((s) => s.organization),
+        ...samples.map((s) => s.organization),
+      ]).length,
     },
   };
 }
