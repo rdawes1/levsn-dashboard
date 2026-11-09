@@ -119,12 +119,21 @@ for (sid, date), rws in sorted(groups.items()):
             if v is not None and not (lo <= v <= hi):
                 flags.append((sid, date, fld, v))
 
-        # Pair with the closest Airtable row for this station+date, if any.
-        def cost(rec):
+        # Pair with an Airtable row only when EVERY shared reading agrees.
+        #
+        # An earlier version took the nearest row with no distance limit. Where
+        # a station+date held two readings and Airtable held one, that absorbed
+        # the new reading onto the existing row and then wrote the existing
+        # row's values again as a "new" record - a duplicate of the old reading,
+        # and the new reading never added. Requiring full agreement means a
+        # second same-day reading simply finds no match and is created.
+        match = None
+        for rec in pool:
             af = rec["fields"]
-            return sum(abs(round(v, 2) - af[t]) for t, v in vals.items()
-                       if v is not None and af.get(t) is not None)
-        match = min(pool, key=cost) if pool else None
+            if all(af.get(t) is not None and abs(round(v, 2) - af[t]) <= 0.011
+                   for t, v in vals.items() if v is not None):
+                match = rec
+                break
         if match is not None:
             pool.remove(match)
             cl = vals.get("Chloride")
