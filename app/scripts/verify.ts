@@ -52,7 +52,13 @@ const EXPECTED_BIG_SISTER_2025: Record<string, [number, number, number, number]>
  * data. What a floor still catches is the failure that matters: a truncated or
  * broken Airtable pull that silently loses records.
  */
-const MINIMUM_TOTALS = { samples: 7417, stationRecords: 225 };
+const MINIMUM_TOTALS = { samples: 7430, stationRecords: 225 };
+
+/**
+ * The two years to compare in the dropped-sites report below. Bump these when
+ * the current run year rolls over.
+ */
+const DROPOUT_YEARS = { previous: 2025, current: 2026 };
 
 /**
  * Ceiling on 2026 readings whose station carries no coordinate, and so cannot
@@ -248,6 +254,42 @@ async function main() {
     unmapped.length <= MAX_UNMAPPED_2026,
     `got ${unmapped.length} at ${unmappedStations.size} stations: ${[...unmappedStations].sort().join(', ')}`
   );
+
+  // A site that reported last year and has gone quiet this year is either a
+  // group that stopped monitoring - which is fine and worth knowing - or data
+  // that never arrived. Defiance SWCD's Pontiac Park was the second kind: it
+  // published 12 readings in 2025, none in 2026, and the gap went unnoticed
+  // for a season because nothing here looked for it. This reports rather than
+  // fails, because legitimate drop-outs are common and an allow-list would
+  // rot; the point is that the list is in front of us on every run.
+  console.log(
+    `\nSites that reported in ${DROPOUT_YEARS.previous} but not ${DROPOUT_YEARS.current} (report only, never fails)`
+  );
+  const yearsByStation = new Map<string, Set<number>>();
+  const orgByStation = new Map<string, string>();
+  for (const s of snap.samples) {
+    if (!s.stationId || s.year === null) continue;
+    let years = yearsByStation.get(s.stationId);
+    if (!years) yearsByStation.set(s.stationId, (years = new Set()));
+    years.add(s.year);
+    if (s.organization) orgByStation.set(s.stationId, s.organization);
+  }
+  const dropped = [...yearsByStation]
+    .filter(([, y]) => y.has(DROPOUT_YEARS.previous) && !y.has(DROPOUT_YEARS.current))
+    .map(([id]) => id)
+    .sort();
+  if (dropped.length === 0) {
+    console.log('  none');
+  } else {
+    const byOrg = new Map<string, string[]>();
+    for (const id of dropped) {
+      const org = orgByStation.get(id) ?? '(no organization)';
+      byOrg.set(org, [...(byOrg.get(org) ?? []), id]);
+    }
+    for (const [org, ids] of [...byOrg].sort(([a], [b]) => a.localeCompare(b))) {
+      console.log(`  ${org} (${ids.length}): ${ids.join(', ')}`);
+    }
+  }
 
   console.log(
     failures === 0
