@@ -24,11 +24,6 @@
     "src": "/logos/clinton-river-watershed-council.webp",
     "width": 80
   },
-  "Community Water Action Toledo": {
-    "height": 94,
-    "src": "/logos/partners-for-clean-streams.webp",
-    "width": 134
-  },
   "Defiance Soil & Water Conservation District": {
     "height": 61,
     "src": "/logos/defiance-swcd.webp",
@@ -53,6 +48,11 @@
     "height": 79,
     "src": "/logos/huron-river-watershed-council.webp",
     "width": 159
+  },
+  "Partners for Clean Streams": {
+    "height": 94,
+    "src": "/logos/partners-for-clean-streams.webp",
+    "width": 134
   },
   "River Raisin": {
     "height": 104,

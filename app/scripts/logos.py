@@ -32,8 +32,11 @@ LOGOS = {
     "Cleveland Metroparks": ("clevemetroparks.webp", "cleveland-metroparks"),
     "Clinton River Watershed Council": ("Clinton River Watershed CouncilLogo.jpeg", "clinton-river-watershed-council"),
     "Defiance Soil & Water Conservation District": ("defianceSoilandWaterConservationDistrict.png", "defiance-swcd"),
-    # Toledo stations are monitored under the Partners for Clean Streams brand.
-    "Community Water Action Toledo": ("PartnersForCleanStreamsUpdated.png", "partners-for-clean-streams"),
+    # The Toledo group's monitoring runs under the CWAT-* station IDs, and their
+    # LEBAF station report is filed as "Clean Water Action Toledo (CWAT)", but
+    # Partners for Clean Streams is what they call the programme and what the
+    # dashboard shows. The name has wandered before; see MEMORY.
+    "Partners for Clean Streams": ("PartnersForCleanStreamsUpdated.png", "partners-for-clean-streams"),
     "Doan Brook Watershed Partnership": ("DoanBrooklogo.webp", "doan-brook-watershed-partnership"),
     "Fredonia State University of New York": ("fredonia-logo-stacked-2c-web-2000px.png", "fredonia-state-university"),
     "Erie Soil and Water Conservation District": ("Erie Soil & Water Conservation District.webp", "erie-swcd"),
