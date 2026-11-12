@@ -57,9 +57,11 @@ const MINIMUM_TOTALS = { samples: 7417, stationRecords: 225 };
 /**
  * Ceiling on 2026 readings whose station carries no coordinate, and so cannot
  * be drawn on the map. See the map-coverage check below for why this is a
- * ceiling rather than a floor.
+ * ceiling rather than a floor. Zero since 12 Nov 2026, when River Raisin sent
+ * the last four missing coordinates - every 2026 reading is now on the map,
+ * and this check exists to keep it that way.
  */
-const MAX_UNMAPPED_2026 = 27;
+const MAX_UNMAPPED_2026 = 0;
 
 /** Exceedance counts cross-checked against Airtable's own Basins rollups. */
 const EXPECTED_EXCEEDANCES: { basin: string; year: number; label: string; count: number }[] = [
@@ -234,10 +236,10 @@ async function main() {
   // `stationRollups` skips it. Partners read that as "my sites are missing"
   // even though every reading is present, so the gap has to stay visible to
   // us rather than waiting for someone to notice. This is a CEILING, not a
-  // floor: 27 readings at River Raisin's four stations are known to have no
-  // coordinate anywhere in the data they sent us. Fixing those lowers the
-  // number; anything that raises it is a new import dropping sites off the
-  // map, which is what this catches.
+  // floor. It is now zero, so any new import that lands a reading at a
+  // station without a coordinate fails here rather than quietly dropping that
+  // site off the map - which is how Summit, Cuyahoga Falls and River Raisin
+  // each went unnoticed until a partner wrote in.
   console.log('\nMap coverage (stations with no coordinate are absent from the map)');
   const unmapped = snap.samples.filter((s) => s.year === 2026 && (s.lat === null || s.lon === null));
   const unmappedStations = new Set(unmapped.map((s) => s.stationId));
