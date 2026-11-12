@@ -14,7 +14,14 @@ Three things this handles that the other imports do not:
 
   * Temperature is sometimes logged a few minutes before the other probes on
     the same visit, producing two timestamps for one sample. Readings are keyed
-    on station + date, which merges them; no conflicting values occur.
+    on station + date, which merges them. That is only safe while the rows
+    AGREE, so disagreement is now detected rather than assumed away: if a
+    station+date carries two different values for the same characteristic, the
+    whole sample is HELD back and reported instead of one value silently
+    winning. BellRiv_2 on 2026-10-31 is the first such case - two complete sets
+    24 minutes apart, DO 63.4 against 7.06 - and before this check the last row
+    simply overwrote the first, which also hid an impossible value from the
+    plausibility flags.
 
   * `Barom.` (mmHg) and `DOPercent_YSI` (%) are not LEVSN parameters and are
     ignored. Units of the four we do take were confirmed against the template's
@@ -36,7 +43,19 @@ import collections, csv, datetime, json, re, sys, urllib.parse, urllib.request
 from pathlib import Path
 
 ROOT = Path("/Users/robertdawes/Desktop/Lake Erie Volunteer Science Network")
-SRC = ROOT / "2026 Data" / "DataStream Upload Template 2.14-RAEON-2026-Field-LEVSN-YSI-Only.xlsb"
+# Windsor resend their whole workbook rather than a delta, so this points at
+# the latest one and the skip-existing rule below turns it into an append.
+#   11 Nov 2026: first load, 173 readings, May-Sep
+#   12 Nov 2026: October added, 196 readings
+SRC = ROOT / "2026 Data" / "WindsorUniversity-UpdatedData-11-12-26.xlsb"
+
+# KNOWN DISAGREEMENT, deliberately not applied. The 12 Nov workbook carries
+# StonyPoint_2 2026-08-31 as DO_mgL 0.313 with DOPercent_YSI 2.77, which is the
+# two figures from Ed Miller's correction email landing in the wrong columns.
+# His email said 31.3% and 2.77 mg/L, and the physics agrees with him: at the
+# 21.9 C recorded, 2.77 mg/L is 31.6% saturation while 0.313 would be 3.5%.
+# Airtable already holds 2.77 and keeps it; this importer only ever adds
+# station+date pairs it does not already have, so the value is untouched.
 BASE = "appVBC2SUwFcom2p5"
 YEAR = 2026
 ORG = "University of Windsor"
@@ -94,16 +113,21 @@ def read_source():
     sites = {r[0]: {"name": r[1], "lat": r[2], "lon": r[3], "type": r[5]}
              for r in loc[1:] if r and r[0]}
     serial = lambda v: (datetime.date(1899, 12, 30) + datetime.timedelta(days=float(v))).isoformat()
-    samples = collections.defaultdict(dict)
+    samples, conflicts = collections.defaultdict(dict), {}
     for r in res:
         if not r or not r[0] or r[1] not in CHARS: continue
-        try: samples[(r[0], serial(r[2]))][CHARS[r[1]]] = float(r[10])
+        try: v = float(r[10])
         except (TypeError, ValueError): continue
-    return sites, samples
+        key, fld = (r[0], serial(r[2])), CHARS[r[1]]
+        prev = samples[key].get(fld)
+        if prev is not None and abs(prev - v) > 0.011:
+            conflicts.setdefault(key, {}).setdefault(fld, [prev]).append(v)
+        samples[key][fld] = v
+    return sites, samples, conflicts
 
 
 print("Reading source...")
-sites, samples = read_source()
+sites, samples, conflicts = read_source()
 print(f"  {len(sites)} sites in template, {len(samples)} samples across "
       f"{len({k[0] for k in samples})} sites with readings")
 
@@ -169,6 +193,16 @@ print(f"   with a basin assigned : {with_basin}")
 print(f"   basin left unset      : {len(creates_st) - with_basin}  (pending Windsor station report)")
 print()
 
+# Samples held back from the import. They stay in the source file and come in
+# on a later run once Windsor confirms; nothing is guessed on their behalf.
+#   RuscomRiv_2 2026-10-31: DO_mgL reads 793.0, the exact value of the
+#     Conduc. cell in the same row, so the conductivity was copied into the
+#     oxygen column. There is no DOPercent_YSI on this sample to rebuild it.
+HOLD = {("RuscomRiv_2", "2026-10-31"): "DO 793.0 is a copy of the Conduc. cell; not reconstructable",
+        **{k: f"two disagreeing measurement sets on one day ({', '.join(sorted(v))})"
+           for k, v in conflicts.items()}}
+held = {k: samples.pop(k) for k in list(samples) if k in HOLD}
+
 flags = []
 for (sid, date), vals in samples.items():
     for fld, (lo, hi) in PLAUSIBLE.items():
@@ -189,6 +223,12 @@ cov = collections.Counter()
 for v in planned.values():
     for f in v: cov[f] += 1
 for f, n in cov.most_common(): print(f"   {f:20} {n}/{len(planned)}")
+print()
+print(f"SAMPLES HELD BACK : {len(held)}")
+for k in sorted(held):
+    print(f"   {k[0]:14} {k[1]}  {HOLD[k]}")
+    if k in conflicts:
+        for fld, vs in sorted(conflicts[k].items()): print(f"        {fld:20} {vs}")
 print()
 print(f"IMPLAUSIBLE VALUES FLAGGED : {len(flags)}")
 for sid, date, fld, v in flags: print(f"   {sid:14} {date}  {fld:18} {v}")
