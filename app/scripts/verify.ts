@@ -16,8 +16,13 @@ const urlArg = process.argv.indexOf('--url');
 const REMOTE = urlArg > -1 ? process.argv[urlArg + 1] : null;
 const LOCAL_SNAPSHOT = 'public/data/snapshot.json';
 
-/** Hidden from the public dashboard per LEVSN programme guidance. */
-const HIDDEN_LABELS = ['Chloride', 'Total Dissolved Solids', 'Conductivity TDS'];
+/**
+ * Hidden from the public dashboard per LEVSN programme guidance. All three are
+ * calculated rather than measured: Salinity and TDS are Airtable formulas on
+ * conductivity, and Conductivity TDS is the same TDS field under a second
+ * threshold. Salinity replaced Chloride here on 12 Nov 2026.
+ */
+const HIDDEN_LABELS = ['Salinity', 'Total Dissolved Solids', 'Conductivity TDS'];
 
 /**
  * Shown deliberately, and asserted so a future change cannot drop one by
@@ -26,7 +31,7 @@ const HIDDEN_LABELS = ['Chloride', 'Total Dissolved Solids', 'Conductivity TDS']
  * partner organisations report against 412, so both must stay on the
  * dashboard (restored 9 Nov 2026 after Summit SWCD flagged the discrepancy).
  */
-const VISIBLE_LABELS = ['Conductivity', 'Conductivity Biocondition'];
+const VISIBLE_LABELS = ['Conductivity', 'Conductivity Biocondition', 'Chloride'];
 
 /** Sourced from the published dashboard: Basin = Big Sister Creek, Year = 2025. */
 const EXPECTED_BIG_SISTER_2025: Record<string, [number, number, number, number]> = {
@@ -47,7 +52,7 @@ const EXPECTED_BIG_SISTER_2025: Record<string, [number, number, number, number]>
  * data. What a floor still catches is the failure that matters: a truncated or
  * broken Airtable pull that silently loses records.
  */
-const MINIMUM_TOTALS = { samples: 5306, stationRecords: 225 };
+const MINIMUM_TOTALS = { samples: 7417, stationRecords: 225 };
 
 /**
  * Ceiling on 2026 readings whose station carries no coordinate, and so cannot
@@ -59,11 +64,13 @@ const MAX_UNMAPPED_2026 = 27;
 /** Exceedance counts cross-checked against Airtable's own Basins rollups. */
 const EXPECTED_EXCEEDANCES: { basin: string; year: number; label: string; count: number }[] = [
 
-  { basin: 'Buffalo', year: 2025, label: 'Salinity', count: 1 },
+  { basin: 'Buffalo', year: 2025, label: 'Conductivity Biocondition', count: 21 },
+  { basin: 'Buffalo', year: 2025, label: 'Chloride', count: 0 },
   { basin: 'Buffalo', year: 2025, label: 'Water Temperature', count: 0 },
   { basin: 'Buffalo', year: 2025, label: 'Dissolved Oxygen', count: 0 },
 
-  { basin: 'Big Sister Creek', year: 2025, label: 'Salinity', count: 0 },
+  { basin: 'Big Sister Creek', year: 2025, label: 'Conductivity Biocondition', count: 7 },
+  { basin: 'Big Sister Creek', year: 2025, label: 'Chloride', count: 0 },
   { basin: 'Big Sister Creek', year: 2025, label: 'Water Temperature', count: 6 },
   { basin: 'Big Sister Creek', year: 2025, label: 'pH', count: 0 },
 ];

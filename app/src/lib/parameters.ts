@@ -71,7 +71,19 @@ export const PARAMETERS: ParameterDef[] = [
     precision: 2,
     thresholdLines: [{ value: 150, label: '150 limit' }],
     zeroBaseline: true,
-    publicVisible: false,
+    // Shown from 12 Nov 2026, swapped with Salinity: the programme reports
+    // direct measurements, and Chloride is entered by volunteers while
+    // Salinity is an Airtable formula on conductivity.
+    //
+    // CAVEAT, and it matters when reading the historical chart. Chloride is a
+    // plain number field, so what is stored is whatever was written at the
+    // time. In 2026 every value is measured. In 2022-2025, 4,123 of 5,268
+    // values are exactly Conductivity x 0.04928 - derived once and frozen -
+    // and only 1,145 are genuine measurements (Summit, Tinkers Creek,
+    // Cleveland Metroparks, Partners for Clean Streams). Nothing in the data
+    // distinguishes the two, so a historical Chloride trend is largely a
+    // restatement of conductivity. Raised with CWA on 12 Nov 2026.
+    publicVisible: true,
   },
   {
     key: 'conductivity',
@@ -163,7 +175,12 @@ export const PARAMETERS: ParameterDef[] = [
     precision: 2,
     thresholdLines: [{ value: 1000, label: '1,000 limit' }],
     zeroBaseline: true,
-    publicVisible: true,
+    // Hidden on 12 Nov 2026 at Sarah Barrow's request: the dashboard is meant
+    // to show direct measurements, and Salinity is an Airtable formula -
+    // (Conductivity ^ 1.0878) x 0.4665 - so it carries no information that
+    // conductivity does not already carry. Still computed and exported; flip
+    // this back to true to restore it.
+    publicVisible: false,
   },
   {
     key: 'totalDissolvedSolids',
