@@ -52,7 +52,7 @@ const EXPECTED_BIG_SISTER_2025: Record<string, [number, number, number, number]>
  * data. What a floor still catches is the failure that matters: a truncated or
  * broken Airtable pull that silently loses records.
  */
-const MINIMUM_TOTALS = { samples: 7430, stationRecords: 225 };
+const MINIMUM_TOTALS = { samples: 7431, stationRecords: 225 };
 
 /**
  * The two years to compare in the dropped-sites report below. Bump these when
